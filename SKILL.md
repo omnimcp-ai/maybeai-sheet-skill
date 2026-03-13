@@ -677,4 +677,4 @@ Authorization: Bearer <token>
 - **Range format**: Use Excel-style ranges like `A1`, `A1:B10`, `A:A`.
 - **Row/column indexing**: Row numbers are 1-indexed (row 1 = first data row). Columns use Excel letters (`A`, `B`, ...).
 - **Authentication**: Endpoints marked `AUTH` require `Authorization: Bearer <MAYBEAI_API_TOKEN>`. Public endpoints work without a token.
-- **Spreadsheet viewer URL**: `https://play-be.omnimcp.ai/api/v1/excel/spreadsheets/d/{doc_id}` renders a live HTML preview of the file.
+- **Spreadsheet viewer URL**: `maybe.ai/docs/spreadsheets/d/{doc_id}` renders a live HTML preview of the file.
