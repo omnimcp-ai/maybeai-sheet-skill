@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
 description: "MaybeAI Sheet skill for full Excel/spreadsheet lifecycle management. Upload, read, edit, and analyze Excel files via the MaybeAI platform. Use when the user wants to: upload or import an Excel file, read spreadsheet data, update cell ranges, insert/delete rows or columns, manage worksheets, add charts or images, apply filters or conditional formatting, calculate formulas, export files, manage versions, or perform any Excel data operation."
-version: 0.1.2
+version: 0.1.3
 metadata:
   openclaw:
     requires:
@@ -22,7 +22,6 @@ Ready-to-run curl examples are in the [`scripts/`](./scripts/) folder. Each scri
 
 ```bash
 export MAYBEAI_API_TOKEN=your_token_here
-export BASE_URL=https://play-be.omnimcp.ai   # optional, this is the default
 export DOC_ID=your_document_id_here          # needed by most scripts
 
 bash scripts/01-file-management.sh   # upload, import, list, rename, delete, export
