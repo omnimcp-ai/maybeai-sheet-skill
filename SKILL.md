@@ -42,11 +42,22 @@ bash scripts/09-end-to-end.sh        # 3 complete workflow examples (upload→ed
 
 ## Setup
 
+### Get your API token
+
+1. Go to **[https://maybe.ai/user/my-plan](https://maybe.ai/user/my-plan)** in your browser.
+   *(Or click your avatar / name at the bottom-left of the app → **My Plan**.)*
+2. Find the **API Token** card below the plan summary — it shows a masked Bearer token with copy and reveal buttons.
+3. Copy the token and set it as an environment variable:
+
+```bash
+export MAYBEAI_API_TOKEN=your_token_here
+```
+
 ### Required environment variable
 
 | Variable | Description |
 |---|---|
-| `MAYBEAI_API_TOKEN` | Your MaybeAI Bearer token for authenticated API calls. |
+| `MAYBEAI_API_TOKEN` | Your MaybeAI Bearer token. Get it from [maybe.ai/user/my-plan](https://maybe.ai/user/my-plan). |
 
 ### Base URL
 
