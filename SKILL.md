@@ -1,6 +1,6 @@
 ---
 name: maybeai-sheet
-description: "MaybeAI Sheet skill for full Excel/spreadsheet lifecycle management. Upload, read, edit, and analyze Excel files via the MaybeAI platform. Use when the user wants to: upload or import an Excel file, read spreadsheet data, update cell ranges, insert/delete rows or columns, manage worksheets, add charts or images, apply filters or conditional formatting, calculate formulas, export files, manage versions, or perform any Excel data operation."
+description: "MaybeAI Sheet skill for full Excel/spreadsheet lifecycle management. Upload, read, edit, and analyze Excel files via the MaybeAI platform. Use when the user wants to: upload or import an Excel file, read spreadsheet data, inspect worksheet headers, update cell ranges, insert/delete rows or columns, manage worksheets, add charts or images, apply filters or conditional formatting, calculate formulas, generate SQL-assisted pivot/result tables, export files, manage versions, or perform any Excel data operation."
 version: 0.1.3
 metadata:
   openclaw:
@@ -14,7 +14,7 @@ metadata:
 
 # MaybeAI Sheet Skill
 
-Full Excel/spreadsheet lifecycle management powered by the [MaybeAI](https://maybe.ai) platform. Upload files, read and write data, manage worksheets, add charts, apply formatting, and more — all via natural language.
+Full Excel/spreadsheet lifecycle management powered by the [MaybeAI](https://maybe.ai) platform. Upload files, read and write data, manage worksheets, add charts, apply formatting, and build SQL-assisted pivot/result tables via natural language.
 
 ## Scripts
 
@@ -90,6 +90,7 @@ Authorization: Bearer <MAYBEAI_API_TOKEN>
 | "Freeze the header row" | `POST /api/v1/excel/freeze_panes` |
 | "Add auto filter" | `POST /api/v1/excel/set_auto_filter` |
 | "Calculate formula =SUM(A1:A10)" | `POST /api/v1/excel/calc_formulas` |
+| "Build a pivot/result sheet from worksheet data" | `POST /api/v1/excel/sql/compile` then `POST /api/v1/excel/sql/write_result` |
 | "Export/download the file" | `GET /api/v1/excel/export/{document_id}` |
 | "Copy this spreadsheet" | `POST /api/v1/excel/copy_excel` |
 
@@ -175,7 +176,7 @@ Authorization: Bearer <token>
 
 ### Reading Data
 
-#### Get Spreadsheet Data (JSON)
+#### Get Spreadsheet Data (MOST USEFUL & FREQUENTLY USE) (JSON)
 ```
 GET /api/v1/excel/spreadsheets/{doc_id}?gid=<sheet_index>
 ```
@@ -208,6 +209,7 @@ POST /api/v1/excel/read_headers
 
 { "uri": "<document_id>", "sheet": "Sheet1" }
 ```
+Use this first for fast schema inspection before writing SQL for pivot/result output.
 
 #### List Versions
 ```
@@ -494,6 +496,160 @@ Authorization: Bearer <token>
 }
 ```
 
+#### Compile SQL for Pivot/Result Output
+```
+POST /api/v1/excel/sql/compile
+Authorization: Bearer <token>
+
+{
+  "uri": "<document_id>?gid=2",
+  "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from gid_2 group by \"Region\" order by \"Revenue\" desc"
+}
+```
+Validate SQL against backend SQLite + worksheet/gid rules before writing any output.
+
+#### Write SQL Result to Worksheet
+```
+POST /api/v1/excel/sql/write_result
+Authorization: Bearer <token>
+
+{
+  "uri": "<document_id>?gid=2",
+  "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from gid_2 group by \"Region\" order by \"Revenue\" desc",
+  "target_worksheet_name": "Pivot_RegionRevenue",
+  "target_start_cell": "A1",
+  "create_sheet_if_missing": true,
+  "clear_target_range": true,
+  "include_headers": true
+}
+```
+Execute SQL and write the pivot/result matrix into a worksheet.
+
+#### SQL Pivot Workflow
+
+Use this for SQL-assisted pivot/result-table generation from worksheet data. Do not describe it as a general SQL engine on sheets. The recommended path is raw SQL authoring, compile-only validation, then dedicated result writing.
+
+Default sequence:
+
+1. Inspect source worksheet names with `POST /api/v1/excel/list_worksheets`.
+2. Inspect headers with `POST /api/v1/excel/read_headers`, or inspect a small sample with `POST /api/v1/excel/read_sheet` and a narrow `range_address`.
+3. Draft SQL using either the worksheet name or a `gid_*` table reference.
+4. Validate SQL with `POST /api/v1/excel/sql/compile`.
+5. If compile succeeds, write the result block with `POST /api/v1/excel/sql/write_result`.
+6. Optionally verify the written output with `POST /api/v1/excel/read_sheet`.
+
+Table naming rules:
+
+- SQL can reference a worksheet name directly.
+- SQL can reference `gid_*` such as `gid_2`.
+- `gid_*` uses the backend worksheet gid mapping returned by worksheet inspection.
+- Quote worksheet names when they contain spaces, for example `from "Sales Data"`.
+- Compile first to catch unsupported syntax or unsupported SQL features.
+
+Examples:
+
+```sql
+select "Region", sum("Revenue") as "Revenue"
+from gid_2
+group by "Region"
+order by "Revenue" desc
+```
+
+```sql
+select "SKU", sum("Qty") as "Qty"
+from "Sales Data"
+group by "SKU"
+order by "Qty" desc
+```
+
+Important limitations:
+
+- Not every SQL feature is supported.
+- Backend behavior follows the current SQL formula compatibility rules and SQLite-based worksheet resolution.
+- `POST /api/v1/excel/calc_formulas` remains useful for preview/debug of formula-driven work, but it is not the main recommended path for pivot/result output.
+- If compile fails, fix the SQL before calling `sql/write_result`.
+
+Example: Revenue by Region
+
+Inspect headers first:
+
+```http
+POST /api/v1/excel/read_headers
+```
+
+```json
+{
+  "uri": "<document_id>?gid=2"
+}
+```
+
+If headers are not enough, read a small sample:
+
+```http
+POST /api/v1/excel/read_sheet
+```
+
+```json
+{
+  "uri": "<document_id>?gid=2",
+  "range_address": "A1:F10"
+}
+```
+
+Draft SQL:
+
+```sql
+select "Region", sum("Revenue") as "Revenue"
+from gid_2
+group by "Region"
+order by "Revenue" desc
+```
+
+Compile before write:
+
+```http
+POST /api/v1/excel/sql/compile
+```
+
+```json
+{
+  "uri": "<document_id>?gid=2",
+  "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from gid_2 group by \"Region\" order by \"Revenue\" desc"
+}
+```
+
+Write the result:
+
+```http
+POST /api/v1/excel/sql/write_result
+```
+
+```json
+{
+  "uri": "<document_id>?gid=2",
+  "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from gid_2 group by \"Region\" order by \"Revenue\" desc",
+  "target_worksheet_name": "Pivot_RegionRevenue",
+  "target_start_cell": "A1",
+  "create_sheet_if_missing": true,
+  "clear_target_range": true,
+  "include_headers": true
+}
+```
+
+Verify the final output:
+
+```http
+POST /api/v1/excel/read_sheet
+```
+
+```json
+{
+  "uri": "<document_id>",
+  "worksheet_name": "Pivot_RegionRevenue",
+  "range_address": "A1:B20"
+}
+```
+
 #### Recalculate All Formulas
 ```
 POST /api/v1/excel/recalculate_formulas
@@ -640,15 +796,14 @@ Authorization: Bearer <token>
 3. Read data: POST /api/v1/excel/read_sheet  {"uri": "<document_id>", "sheet": "Sheet1"}
 ```
 
-### Workflow 2: Create a report from scratch
+### Workflow 2: Build a SQL-assisted pivot/result sheet
 
 ```
-1. Upload an empty template or import existing file
-2. Write data: POST /api/v1/excel/update_range
-3. Add header freeze: POST /api/v1/excel/freeze_panes  {"freeze_rows": 1}
-4. Add auto filter: POST /api/v1/excel/set_auto_filter
-5. Add summary chart: POST /api/v1/excel/add_chart
-6. Export: GET /api/v1/excel/export/{document_id}
+1. List worksheets: POST /api/v1/excel/list_worksheets  {"uri": "<document_id>"}
+2. Inspect headers: POST /api/v1/excel/read_headers  {"uri": "<document_id>?gid=2"}
+3. Compile SQL: POST /api/v1/excel/sql/compile  {"uri": "<document_id>?gid=2", "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from gid_2 group by \"Region\" order by \"Revenue\" desc"}
+4. Write result: POST /api/v1/excel/sql/write_result  {"uri": "<document_id>?gid=2", "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from gid_2 group by \"Region\" order by \"Revenue\" desc", "target_worksheet_name": "Pivot_RegionRevenue", "target_start_cell": "A1", "create_sheet_if_missing": true, "clear_target_range": true, "include_headers": true}
+5. Verify: POST /api/v1/excel/read_sheet  {"uri": "<document_id>", "worksheet_name": "Pivot_RegionRevenue", "range_address": "A1:B20"}
 ```
 
 ### Workflow 3: Update existing data
@@ -673,6 +828,8 @@ Authorization: Bearer <token>
 ## Notes
 
 - **`uri` / `document_id`**: These terms are interchangeable throughout the API. The value returned from `/upload` or `/import_by_url` is used as `uri` in all body parameters.
+- **SQL authoring**: For pivot/result-table generation, inspect worksheet names first, then use `read_headers` or a small `read_sheet` sample before writing SQL. Prefer `sql/compile` plus `sql/write_result` over `calc_formulas` for this workflow.
+- **SQL table references**: Use either the worksheet name or `gid_*`. Quote worksheet names with spaces, for example `"Sales Data"`.
 - **Range format**: Use Excel-style ranges like `A1`, `A1:B10`, `A:A`.
 - **Row/column indexing**: Row numbers are 1-indexed (row 1 = first data row). Columns use Excel letters (`A`, `B`, ...).
 - **Authentication**: Endpoints marked `AUTH` require `Authorization: Bearer <MAYBEAI_API_TOKEN>`. Public endpoints work without a token.
