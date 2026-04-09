@@ -201,7 +201,7 @@ POST /api/v1/excel/list_worksheets
 ```
 POST /api/v1/excel/read_sheet
 
-{ "uri": "<document_id>", "sheet": "Sheet1" }
+{ "uri": "<document_id>", "worksheet_name": "Sheet1" }
 ```
 Returns all cell data from the specified worksheet.
 
@@ -209,9 +209,16 @@ Returns all cell data from the specified worksheet.
 ```
 POST /api/v1/excel/read_headers
 
-{ "uri": "<document_id>", "sheet": "Sheet1" }
+{ "uri": "<document_id>?gid=2" }
 ```
 Use this first for fast schema inspection before writing SQL for pivot/result output.
+
+#### Worksheet Targeting Rule
+
+- Do not rely on `"sheet"` for `excelize-mcp`-backed read/write calls.
+- Use `"worksheet_name"` when the endpoint supports it, such as `read_sheet`, `update_range`, `clear_range`, and `update_data_keep_headers`.
+- Use `?gid=<sheet_index>` inside `uri` when the endpoint does not expose `worksheet_name`, such as `read_headers`, `append_rows`, and `update_range_by_lookup`.
+- If neither `worksheet_name` nor `?gid=` is provided, the backend resolves to the first worksheet, which is effectively `gid=0`.
 
 #### List Versions
 ```
@@ -238,11 +245,13 @@ Authorization: Bearer <token>
 
 {
   "uri": "<document_id>",
-  "sheet": "Sheet1",
-  "range": "A1:B3",
+  "worksheet_name": "Sheet1",
+  "range_address": "A1:B3",
   "values": [["Name", "Score"], ["Alice", 95], ["Bob", 87]]
 }
 ```
+
+Use `uri: "<document_id>?gid=2"` instead of `worksheet_name` if you want to target a sheet by gid.
 
 #### Update Data Keep Headers
 Use this when the sheet already has the correct header row and you want to replace the data rows underneath it without rebuilding column order manually.
@@ -277,7 +286,7 @@ POST /api/v1/excel/update_range_by_lookup
 Authorization: Bearer <token>
 
 {
-  "uri": "<document_id>",
+  "uri": "<document_id>?gid=2",
   "data": [
     {"Order ID": "001", "Status": "Done", "Amount": 120},
     {"Order ID": "004", "Status": "New", "Amount": 80}
@@ -299,7 +308,7 @@ What it does:
 POST /api/v1/excel/clear_range
 Authorization: Bearer <token>
 
-{ "uri": "<document_id>", "sheet": "Sheet1", "range": "A1:D10" }
+{ "uri": "<document_id>", "worksheet_name": "Sheet1", "range_address": "A1:D10" }
 ```
 
 #### Append Rows
@@ -308,11 +317,15 @@ POST /api/v1/excel/append_rows
 Authorization: Bearer <token>
 
 {
-  "uri": "<document_id>",
-  "sheet": "Sheet1",
-  "rows": [["Alice", 95], ["Bob", 87]]
+  "uri": "<document_id>?gid=2",
+  "data": [
+    {"Name": "Alice", "Score": 95},
+    {"Name": "Bob", "Score": 87}
+  ]
 }
 ```
+
+`append_rows` selects the target worksheet from `uri`. If you omit `?gid=`, it appends to the first worksheet.
 
 #### Choosing the right write API
 
@@ -320,6 +333,7 @@ Authorization: Bearer <token>
 - Use `update_data_keep_headers` when you have list-of-dict data and want to replace all table rows while keeping row 1, column order, styles, and optional formula columns.
 - Use `update_range_by_lookup` when you need upsert behavior: update rows that match a key and append rows that do not exist yet.
 - Use `update_range` when you truly need exact A1 targeting such as `B7:D12`, header rewrites, or non-tabular cell edits.
+- For non-first worksheets, always set `worksheet_name` or `uri?gid=N` explicitly. Otherwise writes can land on the first sheet.
 
 #### Agent-friendly patterns
 
@@ -847,7 +861,7 @@ Authorization: Bearer <token>
 ```
 1. Upload: POST /api/v1/excel/upload  → get document_id
 2. List sheets: POST /api/v1/excel/list_worksheets  {"uri": "<document_id>"}
-3. Read data: POST /api/v1/excel/read_sheet  {"uri": "<document_id>", "sheet": "Sheet1"}
+3. Read data: POST /api/v1/excel/read_sheet  {"uri": "<document_id>", "worksheet_name": "Sheet1"}
 ```
 
 ### Workflow 2: Build a SQL-assisted pivot/result sheet
@@ -864,8 +878,8 @@ Authorization: Bearer <token>
 
 ```
 1. Find file: POST /api/v1/excel/search_files  {"keyword": "sales"}
-2. Read current data: POST /api/v1/excel/read_sheet
-3. Upsert changed rows by key: POST /api/v1/excel/update_range_by_lookup
+2. Read current data: POST /api/v1/excel/read_sheet  {"uri": "<document_id>", "worksheet_name": "Sheet1"}
+3. Upsert changed rows by key: POST /api/v1/excel/update_range_by_lookup  {"uri": "<document_id>?gid=2", "data": [...], "on": ["Order ID"]}
 4. Recalculate: POST /api/v1/excel/recalculate_formulas
 ```
 
@@ -873,10 +887,11 @@ Authorization: Bearer <token>
 
 ```
 1. Identify document_id (list_files or upload)
-2. If rows are already ordered arrays: POST /api/v1/excel/append_rows
-3. If rows are objects keyed by headers and may contain existing records: POST /api/v1/excel/update_range_by_lookup
-4. If replacing the whole table under existing headers: POST /api/v1/excel/update_data_keep_headers
-5. Read back to verify: POST /api/v1/excel/read_sheet
+2. Choose the target worksheet first: either `worksheet_name` or `uri?gid=N`
+3. If rows are already ordered arrays or dict rows: POST /api/v1/excel/append_rows  {"uri": "<document_id>?gid=2", "data": [...]}
+4. If rows are objects keyed by headers and may contain existing records: POST /api/v1/excel/update_range_by_lookup  {"uri": "<document_id>?gid=2", "data": [...], "on": [...]}
+5. If replacing the whole table under existing headers: POST /api/v1/excel/update_data_keep_headers  {"uri": "<document_id>", "worksheet_name": "Sheet1", "data": [...]}
+6. Read back to verify: POST /api/v1/excel/read_sheet
 ```
 
 ### Workflow 5: Refresh a table but keep headers and formulas
@@ -898,6 +913,7 @@ Authorization: Bearer <token>
 - **SQL table references**: Use either the worksheet name or `gid_*`. Quote worksheet names with spaces, for example `"Sales Data"`.
 - **Range format**: Use Excel-style ranges like `A1`, `A1:B10`, `A:A`.
 - **Row/column indexing**: Row numbers are 1-indexed (row 1 = first data row). Columns use Excel letters (`A`, `B`, ...).
+- **Worksheet targeting is explicit**: If you do not pass `worksheet_name` or `?gid=` in `uri`, many endpoints fall back to the first worksheet. This is the common reason writes appear to go to `gid=0`.
 - **Header-aware tools are usually safer for agents**: `update_data_keep_headers` and `update_range_by_lookup` work with header names instead of raw column positions, which reduces mistakes when sheet layouts change.
 - **Authentication**: Endpoints marked `AUTH` require `Authorization: Bearer <MAYBEAI_API_TOKEN>`. Public endpoints work without a token.
 - **Spreadsheet viewer URL**: `maybe.ai/docs/spreadsheets/d/{doc_id}` renders a live HTML preview of the file.
