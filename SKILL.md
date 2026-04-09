@@ -82,6 +82,8 @@ Authorization: Bearer <MAYBEAI_API_TOKEN>
 | "List my files" | `POST /api/v1/excel/list_files` |
 | "List worksheets" | `POST /api/v1/excel/list_worksheets` |
 | "Update cells A1:B3" | `POST /api/v1/excel/update_range` |
+| "Replace all data rows but keep headers" | `POST /api/v1/excel/update_data_keep_headers` |
+| "Upsert rows by key, append new ones" | `POST /api/v1/excel/update_range_by_lookup` |
 | "Append new rows" | `POST /api/v1/excel/append_rows` |
 | "Insert 2 rows at row 5" | `POST /api/v1/excel/insert_rows` |
 | "Delete rows 3–5" | `POST /api/v1/excel/delete_rows` |
@@ -242,19 +244,55 @@ Authorization: Bearer <token>
 }
 ```
 
+#### Update Data Keep Headers
+Use this when the sheet already has the correct header row and you want to replace the data rows underneath it without rebuilding column order manually.
+
+```
+POST /api/v1/excel/update_data_keep_headers
+Authorization: Bearer <token>
+
+{
+  "uri": "<document_id>",
+  "worksheet_name": "Sheet1",
+  "data": [
+    {"Name": "Alice", "Score": 95, "Rate": "12%"},
+    {"Name": "Bob", "Score": 87, "Rate": "18%"}
+  ],
+  "preserve_formulas": true,
+  "start_row": 2
+}
+```
+
+What it does:
+- Keeps the existing header row unchanged and preserves its column order.
+- Rewrites data rows using header names, so agents can send list-of-dict data instead of manually ordered row arrays.
+- Can preserve formula columns that are not present in `data` and auto-fill those formulas down.
+- Is often easier than `update_range` when the goal is "replace the table contents but keep the sheet structure".
+
 #### Update Range by Lookup
+Use this for key-based updates or upserts. It is more agent-friendly than low-level `update_range` when rows should be matched by business keys such as `id`, `sku`, or composite keys.
+
 ```
 POST /api/v1/excel/update_range_by_lookup
 Authorization: Bearer <token>
 
 {
   "uri": "<document_id>",
-  "sheet": "Sheet1",
-  "lookup_column": "ID",
-  "lookup_value": "001",
-  "updates": { "Status": "Done" }
+  "data": [
+    {"Order ID": "001", "Status": "Done", "Amount": 120},
+    {"Order ID": "004", "Status": "New", "Amount": 80}
+  ],
+  "on": ["Order ID"],
+  "override": false
 }
 ```
+
+What it does:
+- Matches existing rows by the `on` key column(s), then updates only the matching rows.
+- Automatically appends unmatched rows as new rows, so one call can do update + append.
+- Preserves existing headers and appends new columns to the right if the incoming data contains unseen fields.
+- Does not overwrite existing formula cells.
+- With `override: false`, empty values in the incoming data do not blank out existing cells.
 
 #### Clear Range
 ```
@@ -275,6 +313,22 @@ Authorization: Bearer <token>
   "rows": [["Alice", 95], ["Bob", 87]]
 }
 ```
+
+#### Choosing the right write API
+
+- Use `append_rows` when you already have correctly ordered row arrays and want a simple blind append.
+- Use `update_data_keep_headers` when you have list-of-dict data and want to replace all table rows while keeping row 1, column order, styles, and optional formula columns.
+- Use `update_range_by_lookup` when you need upsert behavior: update rows that match a key and append rows that do not exist yet.
+- Use `update_range` when you truly need exact A1 targeting such as `B7:D12`, header rewrites, or non-tabular cell edits.
+
+#### Agent-friendly patterns
+
+- Easier append than `append_rows`:
+  If the agent has object-shaped rows like `{"sku":"A1","qty":2,"price":10}` and does not want to manually map them into the sheet's column order, prefer `update_range_by_lookup` for upsert-or-append or `update_data_keep_headers` for full-table replacement.
+- Easier update than `update_range`:
+  If the user says "update rows by order ID" or "sync these records into the sheet", prefer `update_range_by_lookup` so the agent does not need to read row numbers and construct A1 ranges first.
+- Keep formulas intact:
+  If the sheet has computed columns like `Total` or `Margin`, prefer `update_data_keep_headers` with `preserve_formulas: true` or `update_range_by_lookup`, which avoids overwriting existing formula cells.
 
 #### Write New Sheet (full data at once)
 ```
@@ -811,7 +865,7 @@ Authorization: Bearer <token>
 ```
 1. Find file: POST /api/v1/excel/search_files  {"keyword": "sales"}
 2. Read current data: POST /api/v1/excel/read_sheet
-3. Update changed rows: POST /api/v1/excel/update_range_by_lookup
+3. Upsert changed rows by key: POST /api/v1/excel/update_range_by_lookup
 4. Recalculate: POST /api/v1/excel/recalculate_formulas
 ```
 
@@ -819,8 +873,20 @@ Authorization: Bearer <token>
 
 ```
 1. Identify document_id (list_files or upload)
-2. Append new rows: POST /api/v1/excel/append_rows
-3. Read back to verify: POST /api/v1/excel/read_sheet
+2. If rows are already ordered arrays: POST /api/v1/excel/append_rows
+3. If rows are objects keyed by headers and may contain existing records: POST /api/v1/excel/update_range_by_lookup
+4. If replacing the whole table under existing headers: POST /api/v1/excel/update_data_keep_headers
+5. Read back to verify: POST /api/v1/excel/read_sheet
+```
+
+### Workflow 5: Refresh a table but keep headers and formulas
+
+```
+1. Identify document_id and worksheet
+2. Read current data or headers if needed: POST /api/v1/excel/read_sheet or /read_headers
+3. Replace table rows: POST /api/v1/excel/update_data_keep_headers
+4. Use preserve_formulas=true if computed columns should remain
+5. Read back to verify: POST /api/v1/excel/read_sheet
 ```
 
 ---
@@ -832,5 +898,6 @@ Authorization: Bearer <token>
 - **SQL table references**: Use either the worksheet name or `gid_*`. Quote worksheet names with spaces, for example `"Sales Data"`.
 - **Range format**: Use Excel-style ranges like `A1`, `A1:B10`, `A:A`.
 - **Row/column indexing**: Row numbers are 1-indexed (row 1 = first data row). Columns use Excel letters (`A`, `B`, ...).
+- **Header-aware tools are usually safer for agents**: `update_data_keep_headers` and `update_range_by_lookup` work with header names instead of raw column positions, which reduces mistakes when sheet layouts change.
 - **Authentication**: Endpoints marked `AUTH` require `Authorization: Bearer <MAYBEAI_API_TOKEN>`. Public endpoints work without a token.
 - **Spreadsheet viewer URL**: `maybe.ai/docs/spreadsheets/d/{doc_id}` renders a live HTML preview of the file.
