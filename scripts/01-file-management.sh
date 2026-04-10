@@ -47,7 +47,7 @@ echo "=== Rename File ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/rename_file" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_URI\", \"name\": \"renamed_sales_report.xlsx\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"new_filename\": \"renamed_sales_report.xlsx\"}" \
   | jq .
 
 # ── Delete File ──────────────────────────────────────────────────────────────

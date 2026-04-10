@@ -8,6 +8,7 @@ BASE_URL="https://play-be.omnimcp.ai"
 TOKEN="${MAYBEAI_API_TOKEN:?Please set MAYBEAI_API_TOKEN}"
 DOC_ID="${DOC_ID:?Please set DOC_ID}"
 DOC_URI="https://www.maybe.ai/docs/spreadsheets/d/$DOC_ID"
+DOC_URI_GID0="${DOC_URI}?gid=0"
 
 # ── Get Spreadsheet Data as JSON ─────────────────────────────────────────────
 # ?gid= selects the worksheet by index (0 = first sheet)
@@ -41,7 +42,7 @@ echo "=== Read Sheet ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/read_sheet" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Sheet1\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"worksheet_name\": \"Sheet1\"}" \
   | jq .
 
 # ── Read Headers ─────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ echo "=== Read Headers ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/read_headers" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Sheet1\"}" \
+  -d "{\"uri\": \"$DOC_URI_GID0\"}" \
   | jq .
 
 # ── List Versions ─────────────────────────────────────────────────────────────
@@ -65,5 +66,5 @@ echo "=== Read Version ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/read_version" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_URI\", \"version\": \"v1\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"version\": 1}" \
   | jq .

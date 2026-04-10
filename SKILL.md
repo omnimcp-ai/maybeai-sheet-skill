@@ -142,7 +142,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/rename_file
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "name": "new_name.xlsx" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "new_filename": "new_name.xlsx" }
 ```
 
 #### Delete File
@@ -201,7 +201,7 @@ POST /api/v1/excel/list_worksheets
 ```
 POST /api/v1/excel/read_sheet
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1" }
 ```
 Returns all cell data from the specified worksheet.
 
@@ -209,7 +209,7 @@ Returns all cell data from the specified worksheet.
 ```
 POST /api/v1/excel/read_headers
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=0" }
 ```
 Use this first for fast schema inspection before writing SQL for pivot/result output.
 
@@ -231,7 +231,7 @@ POST /api/v1/excel/list_versions
 ```
 POST /api/v1/excel/read_version
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "version": "<version_id>" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "version": 1 }
 ```
 
 ---
@@ -246,13 +246,13 @@ Authorization: Bearer <token>
 {
 
   "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
-  "sheet": "Sheet1",
-  "range": "A1:B3",
+  "worksheet_name": "Sheet1",
+  "range_address": "A1:B3",
   "values": [["Name", "Score"], ["Alice", 95], ["Bob", 87]]
 }
 ```
 
-Use `uri: "<document_id>?gid=2"` instead of `worksheet_name` if you want to target a sheet by gid.
+Use `uri: "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=2"` instead of `worksheet_name` if you want to target a sheet by gid.
 
 #### Update Data Keep Headers
 Use this when the sheet already has the correct header row and you want to replace the data rows underneath it without rebuilding column order manually.
@@ -262,7 +262,7 @@ POST /api/v1/excel/update_data_keep_headers
 Authorization: Bearer <token>
 
 {
-  "uri": "<document_id>",
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
   "worksheet_name": "Sheet1",
   "data": [
     {"Name": "Alice", "Score": 95, "Rate": "12%"},
@@ -288,11 +288,13 @@ Authorization: Bearer <token>
 
 {
 
-  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
-  "sheet": "Sheet1",
-  "lookup_column": "ID",
-  "lookup_value": "001",
-  "updates": { "Status": "Done" }
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=0",
+  "data": [
+    { "ID": "001", "Status": "Done" }
+  ],
+  "on": ["ID"],
+  "override": false,
+  "skip_recalculation": false
 }
 ```
 
@@ -309,7 +311,7 @@ POST /api/v1/excel/clear_range
 Authorization: Bearer <token>
 
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "range": "A1:D10" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "range_address": "A1:D10" }
 ```
 
 #### Append Rows
@@ -319,9 +321,11 @@ Authorization: Bearer <token>
 
 {
 
-  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
-  "sheet": "Sheet1",
-  "rows": [["Alice", 95], ["Bob", 87]]
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=0",
+  "data": [
+    {"Name": "Alice", "Score": 95},
+    {"Name": "Bob", "Score": 87}
+  ]
 }
 ```
 
@@ -329,7 +333,7 @@ Authorization: Bearer <token>
 
 #### Choosing the right write API
 
-- Use `append_rows` when you already have correctly ordered row arrays and want a simple blind append.
+- Use `append_rows` when you have object rows keyed by existing headers and want a simple blind append.
 - Use `update_data_keep_headers` when you have list-of-dict data and want to replace all table rows while keeping row 1, column order, styles, and optional formula columns.
 - Use `update_range_by_lookup` when you need upsert behavior: update rows that match a key and append rows that do not exist yet.
 - Use `update_range` when you truly need exact A1 targeting such as `B7:D12`, header rewrites, or non-tabular cell edits.
@@ -344,15 +348,17 @@ Authorization: Bearer <token>
 - Keep formulas intact:
   If the sheet has computed columns like `Total` or `Margin`, prefer `update_data_keep_headers` with `preserve_formulas: true` or `update_range_by_lookup`, which avoids overwriting existing formula cells.
 
-#### Write New Sheet (full data at once)
+#### Write New Sheet (creates a new workbook)
 ```
 POST /api/v1/excel/write_new_sheet
 Authorization: Bearer <token>
 
 {
-  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
-  "sheet": "Summary",
-  "data": [["Col1", "Col2"], [1, 2], [3, 4]]
+  "sheet_name": "Summary",
+  "data": [
+    {"Col1": 1, "Col2": 2},
+    {"Col1": 3, "Col2": 4}
+  ]
 }
 ```
 
@@ -363,9 +369,10 @@ Authorization: Bearer <token>
 
 {
   "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
-  "sheet": "Sheet1",
-  "src_range": "A1:D10",
-  "dst_range": "F1"
+  "worksheet_name": "Sheet1",
+  "from_range": "A1:D10",
+  "to_range": "F1",
+  "auto_fill": false
 }
 ```
 
@@ -374,7 +381,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/copy_range_by_lookup
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "lookup_column": "ID", "lookup_value": "001", "dst_sheet": "Archive" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=0", "from_range": "A2:D2", "lookup_column": "ID", "on": ["ID"], "skip_if_exists": true }
 ```
 
 ---
@@ -386,16 +393,16 @@ Authorization: Bearer <token>
 POST /api/v1/excel/insert_rows
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "row": 3, "count": 2 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "start_row": 3, "row_count": 2 }
 ```
-Inserts `count` blank rows starting at `row` (1-indexed).
+Inserts `row_count` blank rows starting at `start_row` (1-indexed).
 
 #### Delete Rows
 ```
 POST /api/v1/excel/delete_rows
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "row": 3, "count": 2 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "start_row": 3, "row_count": 2 }
 ```
 
 #### Move Row
@@ -403,7 +410,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/move_row
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "from_row": 5, "to_row": 2 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "from_row": 5, "to_row": 2 }
 ```
 
 #### Move Rows (batch)
@@ -411,7 +418,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/move_rows
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "rows": [5, 6], "to_row": 2 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "from_row": 5, "count": 2, "to_row": 2 }
 ```
 
 #### Undo Delete Rows
@@ -419,7 +426,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/undo_delete_rows
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "version_before": 12, "start_row": 3, "row_count": 2 }
 ```
 
 #### Insert Columns
@@ -427,7 +434,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/insert_columns
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "column": "C", "count": 1 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "start_column": 3, "column_count": 1 }
 ```
 
 #### Delete Columns
@@ -435,7 +442,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/delete_columns
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "column": "C", "count": 1 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "start_column": 3, "column_count": 1 }
 ```
 
 #### Move Column
@@ -443,7 +450,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/move_column
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "from_column": "E", "to_column": "B" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "from_column": "E", "to_column": "B" }
 ```
 
 #### Move Columns (batch)
@@ -451,7 +458,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/move_columns
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "columns": ["E", "F"], "to_column": "B" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "from_column": "E", "count": 2, "to_column": "B" }
 ```
 
 #### Undo Delete Columns
@@ -459,7 +466,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/undo_delete_columns
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "version_before": 12, "start_column": 3, "column_count": 1 }
 ```
 
 #### Add Header Columns
@@ -467,7 +474,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/add_header_columns
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "columns": ["NewCol1", "NewCol2"] }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=0", "headers": ["NewCol1", "NewCol2"], "position": "end" }
 ```
 
 #### Set Columns Width
@@ -475,7 +482,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/set_columns_width
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "columns": [{"column": "A", "width": 20}] }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "start_column": "A", "end_column": "A", "width": 20 }
 ```
 
 #### Set Rows Height
@@ -483,7 +490,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/set_rows_height
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "rows": [{"row": 1, "height": 30}] }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "start_row": 1, "end_row": 1, "height": 30 }
 ```
 
 ---
@@ -495,7 +502,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/write_new_worksheet
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "NewSheet", "data": [["A", "B"], [1, 2]] }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "NewSheet", "values": [["A", "B"], ["1", "2"]] }
 ```
 
 #### Delete Worksheet
@@ -503,7 +510,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/delete_worksheet
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "OldSheet" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=2" }
 ```
 
 #### Rename Worksheet
@@ -511,7 +518,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/rename_worksheet
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "new_name": "Sales" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "old_name": "Sheet1", "new_name": "Sales" }
 ```
 
 #### Move Worksheet
@@ -519,7 +526,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/move_worksheet
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Summary", "position": 0 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Summary", "new_index": 0 }
 ```
 
 #### Duplicate Worksheet
@@ -527,7 +534,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/copy_worksheet
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "new_name": "Sheet1_copy" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "new_worksheet_name": "Sheet1_copy" }
 ```
 
 #### List Worksheets (with versions)
@@ -546,7 +553,7 @@ POST /api/v1/excel/list_worksheets_version
 POST /api/v1/excel/calc-formula
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "formula": "=SUM(A1:A10)" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=0", "cellAddress": "A11", "formula": "=SUM(A1:A10)" }
 ```
 
 #### Calculate Multiple Formulas
@@ -555,8 +562,7 @@ POST /api/v1/excel/calc_formulas
 Authorization: Bearer <token>
 
 {
-  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
-  "sheet": "Sheet1",
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=0",
   "formulas": [
     { "cell": "B11", "formula": "=SUM(B1:B10)" },
     { "cell": "C11", "formula": "=AVERAGE(C1:C10)" }
@@ -753,7 +759,7 @@ Supported chart types: `line`, `bar`, `col`, `pie`, `scatter`, `area`, `doughnut
 POST /api/v1/excel/set_chart
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "chart_id": 1, "chart": { ... } }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "cell": "E2", "chart": { ... } }
 ```
 
 #### Delete Chart
@@ -761,7 +767,7 @@ Authorization: Bearer <token>
 POST /api/v1/excel/delete_chart
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "chart_id": 1 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "cell": "E2" }
 ```
 
 ---
@@ -773,14 +779,14 @@ Authorization: Bearer <token>
 POST /api/v1/excel/add_picture
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "cell": "D2", "picture_url": "https://..." }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "cell": "D2", "picture": { "file_base64": "<base64_png>", "extension": "png" } }
 ```
 
 #### Read Picture
 ```
 POST /api/v1/excel/read_picture
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "cell": "D2" }
 ```
 
 #### Delete Picture
@@ -788,7 +794,7 @@ POST /api/v1/excel/read_picture
 POST /api/v1/excel/delete_picture
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1", "picture_id": 1 }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "cell": "D2" }
 ```
 
 ---
@@ -861,7 +867,7 @@ Authorization: Bearer <token>
 ```
 1. Upload: POST /api/v1/excel/upload  → get document_id
 2. List sheets: POST /api/v1/excel/list_worksheets  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>"}
-3. Read data: POST /api/v1/excel/read_sheet  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "sheet": "Sheet1"}
+3. Read data: POST /api/v1/excel/read_sheet  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1"}
 ```
 
 ### Workflow 2: Build a SQL-assisted pivot/result sheet
@@ -878,9 +884,9 @@ Authorization: Bearer <token>
 
 ```
 1. Find file: POST /api/v1/excel/search_files  {"keyword": "sales"}
-2. Read current data: POST /api/v1/excel/read_sheet  {"uri": "<document_id>", "worksheet_name": "Sheet1"}
-3. Upsert changed rows by key: POST /api/v1/excel/update_range_by_lookup  {"uri": "<document_id>?gid=2", "data": [...], "on": ["Order ID"]}
-4. Recalculate: POST /api/v1/excel/recalculate_formulas
+2. Read current data: POST /api/v1/excel/read_sheet  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1"}
+3. Upsert changed rows by key: POST /api/v1/excel/update_range_by_lookup  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=2", "data": [...], "on": ["Order ID"]}
+4. Recalculate: POST /api/v1/excel/recalculate_formulas  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>"}
 ```
 
 ### Workflow 4: Bulk data append
@@ -888,10 +894,10 @@ Authorization: Bearer <token>
 ```
 1. Identify document_id (list_files or upload)
 2. Choose the target worksheet first: either `worksheet_name` or `uri?gid=N`
-3. If rows are already ordered arrays or dict rows: POST /api/v1/excel/append_rows  {"uri": "<document_id>?gid=2", "data": [...]}
-4. If rows are objects keyed by headers and may contain existing records: POST /api/v1/excel/update_range_by_lookup  {"uri": "<document_id>?gid=2", "data": [...], "on": [...]}
-5. If replacing the whole table under existing headers: POST /api/v1/excel/update_data_keep_headers  {"uri": "<document_id>", "worksheet_name": "Sheet1", "data": [...]}
-6. Read back to verify: POST /api/v1/excel/read_sheet
+3. Append object rows: POST /api/v1/excel/append_rows  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=2", "data": [...]}
+4. Upsert object rows by key: POST /api/v1/excel/update_range_by_lookup  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>?gid=2", "data": [...], "on": [...]}
+5. Replace the table under existing headers: POST /api/v1/excel/update_data_keep_headers  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "data": [...]}
+6. Read back to verify: POST /api/v1/excel/read_sheet  {"uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1"}
 ```
 
 ### Workflow 5: Refresh a table but keep headers and formulas

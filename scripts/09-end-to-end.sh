@@ -28,6 +28,7 @@ DOC_URI=$(echo "$UPLOAD_RESP" | jq -r '.uri // empty')
 if [ -z "$DOC_URI" ] || [ "$DOC_URI" = "null" ]; then
   DOC_URI="https://www.maybe.ai/docs/spreadsheets/d/$DOC_ID"
 fi
+DOC_URI_GID0="${DOC_URI}?gid=0"
 echo "Document ID: $DOC_ID"
 echo "Document URI: $DOC_URI"
 
@@ -42,7 +43,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/list_worksheets" \
 echo "[3/4] Reading Sheet1 ..."
 curl -s -X POST "$BASE_URL/api/v1/excel/read_sheet" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Sheet1\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"worksheet_name\": \"Sheet1\"}" \
   | jq .
 
 # Step 4: Update a range and export
@@ -52,8 +53,8 @@ curl -s -X POST "$BASE_URL/api/v1/excel/update_range" \
   -H "Content-Type: application/json" \
   -d "{
     \"uri\": \"$DOC_URI\",
-    \"sheet\": \"Sheet1\",
-    \"range\": \"A1:B2\",
+    \"worksheet_name\": \"Sheet1\",
+    \"range_address\": \"A1:B2\",
     \"values\": [[\"Product\",\"Q1\"],[\"Widget\",5000]]
   }" | jq .
 
@@ -76,8 +77,8 @@ curl -s -X POST "$BASE_URL/api/v1/excel/write_new_worksheet" \
   -H "Content-Type: application/json" \
   -d "{
     \"uri\": \"$DOC_URI\",
-    \"sheet\": \"Summary\",
-    \"data\": [
+    \"worksheet_name\": \"Summary\",
+    \"values\": [
       [\"Month\",\"Revenue\",\"Cost\",\"Profit\"],
       [\"Jan\", 50000, 30000, \"=C2-D2\"],
       [\"Feb\", 62000, 35000, \"=C3-D3\"],
@@ -131,11 +132,10 @@ curl -s -X POST "$BASE_URL/api/v1/excel/append_rows" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_URI\",
-    \"sheet\": \"Sheet1\",
-    \"rows\": [
-      [\"Apr\", 80000, 42000],
-      [\"May\", 95000, 48000]
+    \"uri\": \"$DOC_URI_GID0\",
+    \"data\": [
+      {\"Month\": \"Apr\", \"Revenue\": 80000, \"Cost\": 42000},
+      {\"Month\": \"May\", \"Revenue\": 95000, \"Cost\": 48000}
     ]
   }" | jq .
 
@@ -149,7 +149,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/recalculate_formulas" \
 echo "[3/3] Reading updated sheet ..."
 curl -s -X POST "$BASE_URL/api/v1/excel/read_sheet" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Sheet1\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"worksheet_name\": \"Sheet1\"}" \
   | jq .
 
 echo ""
