@@ -7,6 +7,7 @@
 BASE_URL="https://play-be.omnimcp.ai"
 TOKEN="${MAYBEAI_API_TOKEN:?Please set MAYBEAI_API_TOKEN}"
 DOC_ID="${DOC_ID:?Please set DOC_ID}"
+DOC_URI="https://www.maybe.ai/docs/spreadsheets/d/$DOC_ID"
 
 # ── Calculate Single Formula ──────────────────────────────────────────────────
 echo "=== Calc Single Formula ==="
@@ -14,7 +15,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/calc-formula" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Sheet1\",
     \"formula\": \"=SUM(B2:B10)\"
   }" \
@@ -26,7 +27,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/calc_formulas" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Sheet1\",
     \"formulas\": [
       {\"cell\": \"B11\", \"formula\": \"=SUM(B2:B10)\"},
@@ -41,5 +42,5 @@ echo "=== Recalculate All Formulas ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/recalculate_formulas" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_ID\"}" \
+  -d "{\"uri\": \"$DOC_URI\"}" \
   | jq .

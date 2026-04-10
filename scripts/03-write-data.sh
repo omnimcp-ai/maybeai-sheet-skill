@@ -7,6 +7,7 @@
 BASE_URL="https://play-be.omnimcp.ai"
 TOKEN="${MAYBEAI_API_TOKEN:?Please set MAYBEAI_API_TOKEN}"
 DOC_ID="${DOC_ID:?Please set DOC_ID}"
+DOC_URI="https://www.maybe.ai/docs/spreadsheets/d/$DOC_ID"
 
 # ── Update Range ──────────────────────────────────────────────────────────────
 echo "=== Update Range ==="
@@ -14,7 +15,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/update_range" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Sheet1\",
     \"range\": \"A1:C3\",
     \"values\": [
@@ -32,7 +33,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/update_range_by_lookup" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Sheet1\",
     \"lookup_column\": \"Name\",
     \"lookup_value\": \"Alice\",
@@ -45,7 +46,7 @@ echo "=== Clear Range ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/clear_range" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_ID\", \"sheet\": \"Sheet1\", \"range\": \"D1:F10\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Sheet1\", \"range\": \"D1:F10\"}" \
   | jq .
 
 # ── Append Rows ───────────────────────────────────────────────────────────────
@@ -54,7 +55,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/append_rows" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Sheet1\",
     \"rows\": [
       [\"Charlie\", 77, \"C\"],
@@ -69,7 +70,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/write_new_sheet" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Summary\",
     \"data\": [
       [\"Category\", \"Total\"],
@@ -85,7 +86,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/copy_range_with_formulas" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Sheet1\",
     \"src_range\": \"A1:D10\",
     \"dst_range\": \"F1\"
@@ -98,7 +99,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/copy_range_by_lookup" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Sheet1\",
     \"lookup_column\": \"Status\",
     \"lookup_value\": \"Done\",
