@@ -7,6 +7,7 @@
 BASE_URL="https://play-be.omnimcp.ai"
 TOKEN="${MAYBEAI_API_TOKEN:?Please set MAYBEAI_API_TOKEN}"
 DOC_ID="${DOC_ID:?Please set DOC_ID}"
+DOC_URI="https://www.maybe.ai/docs/spreadsheets/d/$DOC_ID"
 
 # ── Write New Worksheet (with data) ──────────────────────────────────────────
 echo "=== Write New Worksheet ==="
@@ -14,7 +15,7 @@ curl -s -X POST "$BASE_URL/api/v1/excel/write_new_worksheet" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"uri\": \"$DOC_ID\",
+    \"uri\": \"$DOC_URI\",
     \"sheet\": \"Q1 Report\",
     \"data\": [
       [\"Month\", \"Revenue\", \"Cost\"],
@@ -30,7 +31,7 @@ echo "=== Rename Worksheet ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/rename_worksheet" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_ID\", \"sheet\": \"Sheet1\", \"new_name\": \"Sales Data\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Sheet1\", \"new_name\": \"Sales Data\"}" \
   | jq .
 
 # ── Move Worksheet ────────────────────────────────────────────────────────────
@@ -39,7 +40,7 @@ echo "=== Move Worksheet ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/move_worksheet" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_ID\", \"sheet\": \"Summary\", \"position\": 0}" \
+  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Summary\", \"position\": 0}" \
   | jq .
 
 # ── Duplicate Worksheet ───────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ echo "=== Duplicate Worksheet ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/copy_worksheet" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_ID\", \"sheet\": \"Sales Data\", \"new_name\": \"Sales Data (copy)\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Sales Data\", \"new_name\": \"Sales Data (copy)\"}" \
   | jq .
 
 # ── Delete Worksheet ──────────────────────────────────────────────────────────
@@ -55,5 +56,5 @@ echo "=== Delete Worksheet ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/delete_worksheet" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_ID\", \"sheet\": \"Sales Data (copy)\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"sheet\": \"Sales Data (copy)\"}" \
   | jq .
