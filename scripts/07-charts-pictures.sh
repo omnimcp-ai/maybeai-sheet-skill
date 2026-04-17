@@ -9,9 +9,12 @@ TOKEN="${MAYBEAI_API_TOKEN:?Please set MAYBEAI_API_TOKEN}"
 DOC_ID="${DOC_ID:?Please set DOC_ID}"
 DOC_URI="https://www.maybe.ai/docs/spreadsheets/d/$DOC_ID"
 PICTURE_FILE_BASE64="${PICTURE_FILE_BASE64:-iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==}"
+CHART_ID="${CHART_ID:-sales-chart-1}"
+SQL_CHART_ID="${SQL_CHART_ID:-revenue-sql-chart-1}"
 
 # ── Add Chart ─────────────────────────────────────────────────────────────────
-# Supported types: line, bar, col, pie, scatter, area, doughnut, radar
+# Supported types include: line, bar, col, pie, scatter, area, doughnut,
+# radar, bubble, gauge, plus stacked/3D variants.
 echo "=== Add Bar Chart ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/add_chart" \
   -H "Authorization: Bearer $TOKEN" \
@@ -22,21 +25,44 @@ curl -s -X POST "$BASE_URL/api/v1/excel/add_chart" \
     \"cell\": \"E2\",
     \"chart\": {
       \"type\": \"bar\",
+      \"title\": \"Monthly Revenue\",
+      \"legend\": \"bottom\",
+      \"x_axis_name\": \"Month\",
+      \"y_axis_name\": \"Revenue\",
       \"series\": [
         {
-          \"name\": \"Revenue\",
+          \"name\": \"Sheet1!\$B\$1\",
           \"categories\": \"Sheet1!\$A\$2:\$A\$10\",
           \"values\": \"Sheet1!\$B\$2:\$B\$10\"
         }
-      ],
-      \"title\": {\"name\": \"Monthly Revenue\"},
-      \"legend\": {\"position\": \"bottom\"}
+      ]
     }
   }" \
   | jq .
 
-# ── Add Line Chart ────────────────────────────────────────────────────────────
-echo "=== Add Line Chart ==="
+# ── Add Chart With SQL Metadata ───────────────────────────────────────────────
+echo "=== Add Column Chart With SQL Metadata ==="
+curl -s -X POST "$BASE_URL/api/v1/excel/add_chart" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"worksheet_name\": \"Sheet1\",
+    \"cell\": \"M2\",
+    \"chart\": {
+      \"type\": \"col\",
+      \"title\": \"Revenue By Region\",
+      \"sql\": \"select \\\"Region\\\", sum(\\\"Revenue\\\") as \\\"Revenue\\\" from \\\"Sheet1\\\" group by \\\"Region\\\" order by \\\"Revenue\\\" desc\",
+      \"format\": {
+        \"from\": {\"col\": 12, \"row\": 1},
+        \"to\": {\"col\": 19, \"row\": 16}
+      }
+    }
+  }" \
+  | jq .
+
+# ── Add Gauge Chart ───────────────────────────────────────────────────────────
+echo "=== Add Gauge Chart ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/add_chart" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -45,21 +71,32 @@ curl -s -X POST "$BASE_URL/api/v1/excel/add_chart" \
     \"worksheet_name\": \"Sheet1\",
     \"cell\": \"E20\",
     \"chart\": {
-      \"type\": \"line\",
+      \"type\": \"gauge\",
+      \"title\": \"Quota Attainment\",
       \"series\": [
         {
-          \"name\": \"Sales\",
-          \"categories\": \"Sheet1!\$A\$2:\$A\$12\",
-          \"values\": \"Sheet1!\$C\$2:\$C\$12\"
+          \"name\": \"Sheet1!\$B\$1\",
+          \"categories\": \"Sheet1!\$A\$2:\$A\$3\",
+          \"values\": \"Sheet1!\$B\$2:\$B\$3\"
         }
-      ],
-      \"title\": {\"name\": \"Sales Trend\"}
+      ]
     }
   }" \
   | jq .
 
+# ── Inspect Charts ────────────────────────────────────────────────────────────
+echo "=== Read Sheet And Inspect Chart Metadata ==="
+curl -s -X POST "$BASE_URL/api/v1/excel/read_sheet" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"worksheet_name\": \"Sheet1\"
+  }" \
+  | jq '.formatting.charts'
+
 # ── Edit Chart ────────────────────────────────────────────────────────────────
-echo "=== Edit Chart ==="
+echo "=== Edit Chart By chart_id ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/set_chart" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -68,25 +105,34 @@ curl -s -X POST "$BASE_URL/api/v1/excel/set_chart" \
     \"worksheet_name\": \"Sheet1\",
     \"cell\": \"E2\",
     \"chart\": {
-      \"type\": \"bar\",
+      \"chart_id\": \"$CHART_ID\",
+      \"type\": \"col\",
+      \"title\": \"Monthly Revenue Updated\",
+      \"legend\": \"right\",
+      \"x_axis_name\": \"Month\",
+      \"y_axis_name\": \"Revenue\",
+      \"sql\": \"select \\\"Month\\\", \\\"Revenue\\\" from \\\"Sheet1\\\"\",
       \"series\": [
         {
-          \"name\": \"Revenue\",
+          \"name\": \"Sheet1!\$B\$1\",
           \"categories\": \"Sheet1!\$A\$2:\$A\$10\",
           \"values\": \"Sheet1!\$B\$2:\$B\$10\"
         }
       ],
-      \"title\": {\"name\": \"Updated Title\"}
+      \"format\": {
+        \"from\": {\"col\": 4, \"row\": 1},
+        \"to\": {\"col\": 11, \"row\": 16}
+      }
     }
   }" \
   | jq .
 
 # ── Delete Chart ──────────────────────────────────────────────────────────────
-echo "=== Delete Chart ==="
+echo "=== Delete Chart By chart_id ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/delete_chart" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"uri\": \"$DOC_URI\", \"worksheet_name\": \"Sheet1\", \"cell\": \"E2\"}" \
+  -d "{\"uri\": \"$DOC_URI\", \"worksheet_name\": \"Sheet1\", \"chart_id\": \"$CHART_ID\"}" \
   | jq .
 
 # ── Add Picture ───────────────────────────────────────────────────────────────

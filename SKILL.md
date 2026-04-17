@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
 description: "MaybeAI Sheet skill for full Excel/spreadsheet lifecycle management. Upload, read, edit, and analyze Excel files via the MaybeAI platform. Use when the user wants to: upload or import an Excel file, read spreadsheet data, inspect worksheet headers, update cell ranges, insert/delete rows or columns, manage worksheets, add charts or images, apply filters or conditional formatting, calculate formulas, generate SQL-assisted pivot/result tables, export files, manage versions, or perform any Excel data operation."
-version: 0.1.4
+version: 0.1.5
 metadata:
   openclaw:
     requires:
@@ -88,7 +88,10 @@ Authorization: Bearer <MAYBEAI_API_TOKEN>
 | "Insert 2 rows at row 5" | `POST /api/v1/excel/insert_rows` |
 | "Delete rows 3–5" | `POST /api/v1/excel/delete_rows` |
 | "Add a new worksheet" | `POST /api/v1/excel/write_new_worksheet` |
+| "Inspect existing charts on a sheet" | `POST /api/v1/excel/read_sheet` and inspect `formatting.charts` |
 | "Add a bar chart" | `POST /api/v1/excel/add_chart` |
+| "Edit or move an existing chart" | `POST /api/v1/excel/set_chart` |
+| "Delete a chart" | `POST /api/v1/excel/delete_chart` |
 | "Freeze the header row" | `POST /api/v1/excel/freeze_panes` |
 | "Format one or more ranges" | `POST /api/v1/excel/batch_set_cell_style` |
 | "Add auto filter" | `POST /api/v1/excel/set_auto_filter` |
@@ -205,6 +208,13 @@ POST /api/v1/excel/read_sheet
 { "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1" }
 ```
 Returns all cell data from the specified worksheet.
+
+`read_sheet` also returns worksheet formatting metadata. For chart work, inspect:
+
+- `formatting.charts`: current charts on the worksheet, including `cell`, `chart_id`, `type`, `title`, `legend`, `sql`, `series`, and optional `format`.
+- `formatting.pictures`: current pictures on the worksheet.
+
+Use `read_sheet` before `set_chart` or `delete_chart` when you need to identify the exact chart to edit, especially if multiple charts share the same anchor cell.
 
 #### Read Headers
 ```
@@ -740,6 +750,45 @@ Authorization: Bearer <token>
 
 ### Charts
 
+#### Chart Rules
+
+- `add_chart` and `set_chart` both require `chart.type`.
+- `add_chart` and `set_chart` require either `chart.series` or `chart.sql`.
+- `chart.series` may be an empty array only when `chart.sql` is provided.
+- Treat `chart.sql` as source metadata recorded with the chart. If the user wants to chart computed SQL results, first write the result table to a worksheet, then point `series` at that written range.
+- If a series is provided, each series item must include `values`. `name`, `categories`, and `sizes` are optional.
+- `title` is a plain string, not an Excelize nested object.
+- `legend` is a plain string: `bottom`, `left`, `right`, `top`, or `none`.
+- Default chart size is `width: 480`, `height: 290`.
+- `worksheet_name` is supported for all chart endpoints. If omitted, the backend resolves the worksheet from `uri`, including `?gid=<sheet_index>` when present.
+- Prefer reading the sheet first and reusing `formatting.charts[*].chart_id` for follow-up edits or deletes.
+
+#### Supported Chart Types
+
+Common types:
+
+- `line`, `bar`, `col`, `pie`, `scatter`, `area`, `doughnut`, `radar`, `bubble`
+
+Also supported:
+
+- `line_3d`
+- `bar_stacked`, `bar_percent_stacked`
+- `bar_3d_clustered`, `bar_3d_stacked`, `bar_3d_percent_stacked`
+- `bar_3d_cone_clustered`, `bar_3d_cone_stacked`, `bar_3d_cone_percent_stacked`
+- `bar_3d_pyramid_clustered`, `bar_3d_pyramid_stacked`, `bar_3d_pyramid_percent_stacked`
+- `bar_3d_cylinder_clustered`, `bar_3d_cylinder_stacked`, `bar_3d_cylinder_percent_stacked`
+- `col_stacked`, `col_percent_stacked`
+- `col_3d`, `col_3d_clustered`, `col_3d_stacked`, `col_3d_percent_stacked`
+- `col_3d_cone`, `col_3d_cone_clustered`, `col_3d_cone_stacked`, `col_3d_cone_percent_stacked`
+- `col_3d_pyramid`, `col_3d_pyramid_clustered`, `col_3d_pyramid_stacked`, `col_3d_pyramid_percent_stacked`
+- `col_3d_cylinder`, `col_3d_cylinder_clustered`, `col_3d_cylinder_stacked`, `col_3d_cylinder_percent_stacked`
+- `area_stacked`, `area_percent_stacked`, `area_3d`, `area_3d_stacked`, `area_3d_percent_stacked`
+- `pie_3d`, `pie_of_pie`, `bar_of_pie`
+- `surface_3d`, `wireframe_surface_3d`, `contour`, `wireframe_contour`
+- `bubble_3d`
+- `stock_high_low_close`, `stock_open_high_low_close`
+- `gauge` is accepted as an alias and is stored as a doughnut-style chart
+
 #### Add Chart
 ```
 POST /api/v1/excel/add_chart
@@ -751,28 +800,338 @@ Authorization: Bearer <token>
   "cell": "E2",
   "chart": {
     "type": "bar",
-    "series": [{ "name": "Sales", "categories": "Sheet1!A2:A10", "values": "Sheet1!B2:B10" }],
-    "title": { "name": "Monthly Sales" }
+    "title": "Monthly Sales",
+    "legend": "bottom",
+    "x_axis_name": "Month",
+    "y_axis_name": "Revenue",
+    "series": [
+      {
+        "name": "Sheet1!$B$1",
+        "categories": "Sheet1!$A$2:$A$10",
+        "values": "Sheet1!$B$2:$B$10"
+      }
+    ]
   }
 }
 ```
-Supported chart types: `line`, `bar`, `col`, `pie`, `scatter`, `area`, `doughnut`, `radar`.
 
-#### Edit Chart
+Notes:
+
+- `chart_id` is optional on add, but you should set one if the chart will be edited later.
+- Use absolute Excel ranges like `Sheet1!$A$2:$A$10` in `series`.
+- You can attach SQL source metadata by sending `sql` and an empty `series` array:
+
+```
+POST /api/v1/excel/add_chart
+Authorization: Bearer <token>
+
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "Dashboard",
+  "cell": "M2",
+  "chart": {
+    "type": "col",
+    "title": "Revenue by Region",
+    "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from \"Sales\" group by \"Region\" order by \"Revenue\" desc",
+  }
+}
+```
+
+For real SQL-to-chart workflows, prefer this sequence:
+
+```
+1. POST /api/v1/excel/sql/compile
+2. POST /api/v1/excel/sql/write_result
+3. POST /api/v1/excel/add_chart using series ranges that point at the written result sheet
+```
+
+#### Chart Positioning With `format`
+
+Use `chart.format` when you need deterministic placement or want to size a chart independently from default dimensions.
+
+```
+"format": {
+  "offset_x": 8,
+  "offset_y": 4,
+  "scale_x": 1.0,
+  "scale_y": 1.0,
+  "lock_aspect_ratio": false,
+  "from": { "col": 4, "row": 1 },
+  "to": { "col": 11, "row": 16 }
+}
+```
+
+Rules:
+
+- `from.col` and `from.row` are 0-indexed.
+- `to.col` and `to.row` are 0-indexed.
+- `from` and `to` define a two-cell anchor for the chart.
+- `col_off` and `row_off` are EMU offsets, not pixels. `offset_x` and `offset_y` are pixels.
+- Do not set identical `from` and `to`; the backend rejects zero-size anchors.
+- If you care about layout stability across repeated edits, use `format.from` and `format.to` instead of relying only on `cell`.
+
+#### Edit or Replace Chart
 ```
 POST /api/v1/excel/set_chart
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "cell": "E2", "chart": { ... } }
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "Sheet1",
+  "cell": "E2",
+  "chart": {
+    "chart_id": "sales-chart-1",
+    "type": "col",
+    "title": "Monthly Sales (Updated)",
+    "legend": "right",
+    "x_axis_name": "Month",
+    "y_axis_name": "Revenue",
+    "sql": "select \"Month\", \"Revenue\" from \"Sheet1\"",
+    "series": [
+      {
+        "name": "Sheet1!$B$1",
+        "categories": "Sheet1!$A$2:$A$10",
+        "values": "Sheet1!$B$2:$B$10"
+      }
+    ],
+    "format": {
+      "from": { "col": 4, "row": 1 },
+      "to": { "col": 11, "row": 16 }
+    }
+  }
+}
 ```
+
+`set_chart` guidance:
+
+- Prefer passing `chart.chart_id` when editing an existing chart.
+- Use `cell` as the target anchor you want after the update.
+- Set `x_axis_name` and `y_axis_name` whenever the chart should display explicit axis titles.
+- If multiple charts share one cell, `chart_id` is the only safe way to edit the intended chart.
+- Backend behavior follows excelize `SetChart` semantics. If the requested chart is not found, the backend may create a chart at the target cell, so verify with `read_sheet` afterward.
 
 #### Delete Chart
 ```
 POST /api/v1/excel/delete_chart
 Authorization: Bearer <token>
 
-{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "cell": "E2" }
+{ "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1", "chart_id": "sales-chart-1" }
 ```
+
+Delete rules:
+
+- You must provide either `cell` or `chart_id`.
+- Prefer `chart_id` for precise deletion.
+- If you delete by `cell` and multiple charts share that anchor cell, backend deletion is cell-based and can remove all charts anchored there.
+- After deletion, use `read_sheet` and confirm the chart is gone from `formatting.charts`.
+
+#### Recommended Chart Workflow
+
+```
+1. Inspect worksheet and existing chart layout: POST /api/v1/excel/read_sheet
+2. If editing, capture the target chart's chart_id from formatting.charts
+3. Add or set the chart with explicit worksheet_name and cell
+4. For stable placement, include chart.format.from and chart.format.to
+5. Read the sheet again and verify formatting.charts
+```
+
+#### Recommended Sheet-Chart Authoring Flow
+
+When building a chart from worksheet data, prefer a schema-first workflow:
+
+```
+1. List worksheets: POST /api/v1/excel/list_worksheets
+2. Read headers for every relevant worksheet first: POST /api/v1/excel/read_headers
+3. Generate the SQL formula after you know the exact headers
+4. Add the chart with POST /api/v1/excel/add_chart and include that SQL in chart.sql
+5. Read back with POST /api/v1/excel/read_sheet and verify formatting.charts
+```
+
+Why this order:
+
+- `read_headers` is the safest way to understand available dimensions and measures before drafting chart SQL.
+- If multiple worksheets may be used, inspect each relevant worksheet header set first instead of guessing column names.
+- The SQL should be derived from real worksheet headers, not from user prose alone.
+
+Recommended request pattern:
+
+```
+1. POST /api/v1/excel/list_worksheets
+2. POST /api/v1/excel/read_headers for each worksheet or gid you may chart from
+3. Draft SQL using worksheet names or gid_* table names
+4. POST /api/v1/excel/add_chart with:
+   - chart.type
+   - chart.sql
+   - chart.x_axis_name when the x-axis should be labeled
+   - chart.y_axis_name when the y-axis should be labeled
+   - chart.series if the plotted range already exists in a worksheet
+```
+
+Important backend rule:
+
+- `chart.sql` is the chart's stored source/query metadata.
+- If the chart should be driven by a computed SQL result table, use:
+
+```
+1. POST /api/v1/excel/sql/compile
+2. POST /api/v1/excel/sql/write_result
+3. POST /api/v1/excel/add_chart with the same SQL in chart.sql and the written cell ranges in chart.series
+```
+
+Minimal example:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "Dashboard",
+  "cell": "E2",
+  "chart": {
+    "chart_id": "region-revenue-chart",
+    "type": "col",
+    "title": "Revenue by Region",
+    "x_axis_name": "Region",
+    "y_axis_name": "Revenue",
+    "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from \"Sales\" group by \"Region\" order by \"Revenue\" desc",
+    "series": [
+      {
+        "name": "ChartData!$B$1",
+        "categories": "ChartData!$A$2:$A$10",
+        "values": "ChartData!$B$2:$B$10"
+      }
+    ]
+  }
+}
+```
+
+Agent rule:
+
+- For sheet chart tasks, do not draft SQL first and inspect headers later.
+- Always inspect worksheet headers first, then generate SQL, then call `add_chart`.
+
+#### Arranging N Charts On a Worksheet
+
+If you need to place `n` charts on one worksheet, use a dashboard layout instead of dropping charts directly into the raw data grid.
+
+- Prefer a dedicated worksheet such as `Dashboard` or `Charts`.
+- Keep source tables on the left or on separate worksheets; keep charts in a clean visual grid.
+- With the default chart size (`480x290`), a practical 2-column anchor pattern is `E2`, `M2`, `E18`, `M18`, `E34`, `M34`, ...
+- Leave at least 1 blank column and 2 blank rows between neighboring charts.
+- Do not intentionally anchor multiple charts to the same `cell` unless you plan to manage them by `chart_id`.
+- For 1-3 charts, use a single column with larger charts.
+- For 4-8 charts, use a 2-column grid.
+- For more than 8 charts, split across multiple dashboard worksheets by topic or audience instead of shrinking everything into one sheet.
+- When charts must align exactly, define every chart with `format.from` and `format.to` rather than relying on default cell anchoring.
+
+A good default tiling plan for `n` charts is:
+
+```
+column anchors: E, M
+row anchors:    2, 18, 34, 50, ...
+
+chart 1 -> E2
+chart 2 -> M2
+chart 3 -> E18
+chart 4 -> M18
+chart 5 -> E34
+chart 6 -> M34
+...
+```
+
+Use this only as a starting point. If row heights or column widths have been customized, anchor by `format.from` and `format.to` so layout does not drift.
+
+#### Dashboard Layout Template
+
+Use this template when the user asks to build a worksheet-level dashboard with multiple charts.
+
+Dashboard structure:
+
+- Row 1: dashboard title or KPI summary
+- Rows 2+: chart grid
+- Keep raw data tables off the dashboard when possible
+- If the dashboard must reference local tables, place them far left or below the chart area
+
+Column strategy:
+
+- `n <= 3`: single-column layout
+- `4 <= n <= 8`: two-column layout
+- `n > 8`: split across multiple dashboard worksheets
+
+Single-column template:
+
+```
+anchors: E2, E18, E34, E50, ...
+from/to: (4,1)->(11,16), (4,17)->(11,32), ...
+```
+
+Two-column template:
+
+```
+left column anchors:  E2, E18, E34, E50, ...
+right column anchors: M2, M18, M34, M50, ...
+
+left chart format:  from {col: 4,  row: r}  to {col: 11, row: r+15}
+right chart format: from {col: 12, row: r}  to {col: 19, row: r+15}
+where r = 1, 17, 33, 49, ...
+```
+
+Chart allocation rule:
+
+```
+chart 1  -> E2
+chart 2  -> M2
+chart 3  -> E18
+chart 4  -> M18
+chart 5  -> E34
+chart 6  -> M34
+chart 7  -> E50
+chart 8  -> M50
+...
+```
+
+Practical algorithm for `n` charts:
+
+```
+if n <= 3:
+  use 1 column
+  row_step = 16
+  anchors = [E2, E18, E34, ...]
+else if n <= 8:
+  use 2 columns
+  row_step = 16
+  columns = [E, M]
+  fill row by row
+else:
+  split by topic across Dashboard_1, Dashboard_2, ...
+```
+
+Recommended chart grouping:
+
+- Top row: overview KPIs, trend, total distribution
+- Middle rows: segment comparisons such as region, product, channel
+- Lower rows: diagnostic or long-tail breakdown charts
+
+Copyable planning template:
+
+```json
+{
+  "worksheet_name": "Dashboard",
+  "layout": "two_column",
+  "charts": [
+    { "chart_id": "chart-1", "cell": "E2",  "format": { "from": { "col": 4,  "row": 1 },  "to": { "col": 11, "row": 16 } } },
+    { "chart_id": "chart-2", "cell": "M2",  "format": { "from": { "col": 12, "row": 1 },  "to": { "col": 19, "row": 16 } } },
+    { "chart_id": "chart-3", "cell": "E18", "format": { "from": { "col": 4,  "row": 17 }, "to": { "col": 11, "row": 32 } } },
+    { "chart_id": "chart-4", "cell": "M18", "format": { "from": { "col": 12, "row": 17 }, "to": { "col": 19, "row": 32 } } }
+  ]
+}
+```
+
+Agent rule for dashboard authoring:
+
+- Decide the full layout first.
+- Reserve all chart positions before writing any chart.
+- Give every chart a stable `chart_id`.
+- Use the same `cell` and `format` when revising a chart with `set_chart`.
+- After every 2-4 charts, run `read_sheet` and verify `formatting.charts`.
 
 ---
 
@@ -962,6 +1321,18 @@ Authorization: Bearer <token>
 5. Read back to verify: POST /api/v1/excel/read_sheet
 ```
 
+### Workflow 6: Build a dashboard worksheet with multiple charts
+
+```
+1. Inspect worksheet names and source tables: POST /api/v1/excel/list_worksheets and /read_sheet
+2. Create or reuse a clean dashboard sheet: POST /api/v1/excel/write_new_worksheet
+3. Choose anchor cells in a 1-column or 2-column grid, for example E2, M2, E18, M18
+4. Add each chart with POST /api/v1/excel/add_chart and set chart_id for every chart
+5. If exact placement matters, define chart.format.from and chart.format.to for each chart
+6. Read back with POST /api/v1/excel/read_sheet and verify formatting.charts before adding more charts
+7. Use POST /api/v1/excel/set_chart for later revisions and POST /api/v1/excel/delete_chart by chart_id for cleanup
+```
+
 ---
 
 ## Notes
@@ -975,5 +1346,8 @@ Authorization: Bearer <token>
 - **Row/column indexing**: Row numbers are 1-indexed (row 1 = first data row). Columns use Excel letters (`A`, `B`, ...).
 - **Worksheet targeting is explicit**: If you do not pass `worksheet_name` or `?gid=` in `uri`, many endpoints fall back to the first worksheet. This is the common reason writes appear to go to `gid=0`.
 - **Header-aware tools are usually safer for agents**: `update_data_keep_headers` and `update_range_by_lookup` work with header names instead of raw column positions, which reduces mistakes when sheet layouts change.
+- **Chart inspection rule**: Use `read_sheet` to inspect `formatting.charts` before editing or deleting charts. This is where you get `chart_id`.
+- **Chart identity rule**: If a chart will be updated later, create it with `chart.chart_id` and keep reusing that same ID in `set_chart` and `delete_chart`.
+- **Chart payload rule**: Chart APIs use flat fields like `title`, `legend`, `x_axis_name`, and `y_axis_name`. Do not send nested Excelize objects like `{ "title": { "name": "..." } }`.
 - **Authentication**: Endpoints marked `AUTH` require `Authorization: Bearer <MAYBEAI_API_TOKEN>`. Public endpoints work without a token.
 - **Spreadsheet viewer URL**: `https://www.maybe.ai/docs/spreadsheets/d/{doc_id}` renders a live HTML preview of the file and is the same base format used for request `uri` values.

@@ -1,4 +1,4 @@
 interface:
   display_name: "MaybeAI Sheet"
-  short_description: "Spreadsheet editing and SQL pivot workflows"
-  default_prompt: "Use $maybeai-sheet to inspect this workbook, validate SQL, and write a pivot result sheet."
+  short_description: "Spreadsheet editing, charting, and SQL pivot workflows"
+  default_prompt: "Use $maybeai-sheet to inspect this workbook, validate SQL, write a pivot result sheet, and build or arrange charts/result sheets."
