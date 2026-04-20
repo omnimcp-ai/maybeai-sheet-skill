@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
 description: "MaybeAI Sheet skill for full Excel/spreadsheet lifecycle management. Upload, read, edit, and analyze Excel files via the MaybeAI platform. Use when the user wants to: upload or import an Excel file, read spreadsheet data, inspect worksheet headers, update cell ranges, insert/delete rows or columns, manage worksheets, add charts or images, apply filters or conditional formatting, calculate formulas, generate SQL-assisted pivot/result tables, export files, manage versions, or perform any Excel data operation."
-version: 0.1.5
+version: 0.1.6
 metadata:
   openclaw:
     requires:
@@ -754,14 +754,51 @@ Authorization: Bearer <token>
 
 - `add_chart` and `set_chart` both require `chart.type`.
 - `add_chart` and `set_chart` require either `chart.series` or `chart.sql`.
-- `chart.series` may be an empty array only when `chart.sql` is provided.
-- Treat `chart.sql` as source metadata recorded with the chart. If the user wants to chart computed SQL results, first write the result table to a worksheet, then point `series` at that written range.
+- For sheet chart tasks, prefer `chart.sql` and omit `chart.series`.
+- Do not send `series: []` when `chart.sql` is present unless the backend explicitly requires it for a specific chart type.
+- Use `chart.series` only when the user explicitly wants to chart fixed worksheet ranges instead of SQL.
 - If a series is provided, each series item must include `values`. `name`, `categories`, and `sizes` are optional.
 - `title` is a plain string, not an Excelize nested object.
 - `legend` is a plain string: `bottom`, `left`, `right`, `top`, or `none`.
+- `x_axis_name` and `y_axis_name` are plain strings.
+- `chart_id` is optional on add, but strongly recommended when the chart will be edited, moved, or deleted later.
+- `width`, `height`, `show_blanks`, and `format` are supported chart fields when you need explicit rendering or placement control.
 - Default chart size is `width: 480`, `height: 290`.
 - `worksheet_name` is supported for all chart endpoints. If omitted, the backend resolves the worksheet from `uri`, including `?gid=<sheet_index>` when present.
 - Prefer reading the sheet first and reusing `formatting.charts[*].chart_id` for follow-up edits or deletes.
+
+#### add_chart Practical Payload
+
+Use this shape as the baseline when authoring dashboard charts:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<doc_id>",
+  "worksheet_name": "Dashboard",
+  "cell": "B2",
+  "chart": {
+    "chart_id": "unique-id",
+    "type": "line|bar|col|area|gauge|pie|doughnut|radar",
+    "title": "Chart Title",
+    "legend": "none|bottom|top|left|right",
+    "x_axis_name": "",
+    "y_axis_name": "",
+    "width": 480,
+    "height": 360,
+    "show_blanks": "gap",
+    "sql": "select ... from gid_0",
+    "format": { "...": "..." }
+  }
+}
+```
+
+Practical guidance:
+
+- Use `chart_id` for any chart that may be revised later.
+- Prefer `sql` as the chart data source. Do not include `series` for normal sheet chart creation.
+- Use `show_blanks: "gap"` for trend charts unless the user explicitly wants blanks connected.
+- Keep `title`, `legend`, `x_axis_name`, and `y_axis_name` flat. Do not send nested Excelize objects.
+- For dashboard charts, `480x360` is a practical explicit size when you want a taller aspect ratio than the backend default.
 
 #### Supported Chart Types
 
@@ -804,13 +841,7 @@ Authorization: Bearer <token>
     "legend": "bottom",
     "x_axis_name": "Month",
     "y_axis_name": "Revenue",
-    "series": [
-      {
-        "name": "Sheet1!$B$1",
-        "categories": "Sheet1!$A$2:$A$10",
-        "values": "Sheet1!$B$2:$B$10"
-      }
-    ]
+    "sql": "select \"Month\", sum(\"Revenue\") as \"Revenue\" from \"Sheet1\" group by \"Month\" order by \"Month\""
   }
 }
 ```
@@ -818,8 +849,9 @@ Authorization: Bearer <token>
 Notes:
 
 - `chart_id` is optional on add, but you should set one if the chart will be edited later.
-- Use absolute Excel ranges like `Sheet1!$A$2:$A$10` in `series`.
-- You can attach SQL source metadata by sending `sql` and an empty `series` array:
+- Prefer `sql` for sheet charts and omit `series`.
+- Use absolute Excel ranges like `Sheet1!$A$2:$A$10` in `series` only for fixed-range charts.
+- SQL-only chart example:
 
 ```
 POST /api/v1/excel/add_chart
@@ -832,18 +864,36 @@ Authorization: Bearer <token>
   "chart": {
     "type": "col",
     "title": "Revenue by Region",
-    "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from \"Sales\" group by \"Region\" order by \"Revenue\" desc",
+    "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from \"Sales\" group by \"Region\" order by \"Revenue\" desc"
   }
 }
 ```
 
-For real SQL-to-chart workflows, prefer this sequence:
+For sheet chart workflows, prefer this sequence:
 
 ```
-1. POST /api/v1/excel/sql/compile
-2. POST /api/v1/excel/sql/write_result
-3. POST /api/v1/excel/add_chart using series ranges that point at the written result sheet
+1. POST /api/v1/excel/list_worksheets
+2. POST /api/v1/excel/read_headers
+3. POST /api/v1/excel/add_chart with chart.sql and no chart.series
 ```
+
+#### Gauge SQL Rules
+
+For `gauge` charts, the SQL shape matters:
+
+- Prefer SQL that returns a single numeric value column.
+- Good example: `select sum("访客") from gid_0`
+- Do not send a normal label-plus-value result like `select "label" as ..., sum(...) as ...` for a gauge chart.
+- The one practical exception is a deliberately constructed 2-row result for a custom doughnut-style gauge, but that is a special-case layout, not the default gauge pattern.
+
+#### Legend Conventions
+
+Recommended `legend` values by chart family:
+
+| chart type | legend |
+| --- | --- |
+| `gauge`, `pie`, `doughnut`, `radar` | `none` |
+| `line`, `bar`, `col`, `area` | `bottom` or `top` |
 
 #### Chart Positioning With `format`
 
@@ -867,8 +917,28 @@ Rules:
 - `to.col` and `to.row` are 0-indexed.
 - `from` and `to` define a two-cell anchor for the chart.
 - `col_off` and `row_off` are EMU offsets, not pixels. `offset_x` and `offset_y` are pixels.
+- In Duke's dashboard measurements, 1 column is about `101px` and 1 row is about `27px`.
+- `col_off: 0` and `row_off: 0` place the chart from the top-left corner of the anchor cell.
+- `to.row_off` should stay `0` in the stable dashboard layout pattern.
+- `to.col_off: 76` is a practical reference value for the right edge in the tested layout.
 - Do not set identical `from` and `to`; the backend rejects zero-size anchors.
 - If you care about layout stability across repeated edits, use `format.from` and `format.to` instead of relying only on `cell`.
+
+Precision layout example:
+
+```json
+{
+  "format": {
+    "from": { "col": 1, "col_off": 0, "row": 1, "row_off": 0 },
+    "to": { "col": 6, "col_off": 76, "row": 23, "row_off": 0 },
+    "lock_aspect_ratio": true,
+    "offset_x": 0,
+    "offset_y": 0,
+    "scale_x": 1,
+    "scale_y": 1
+  }
+}
+```
 
 #### Edit or Replace Chart
 ```
@@ -887,13 +957,6 @@ Authorization: Bearer <token>
     "x_axis_name": "Month",
     "y_axis_name": "Revenue",
     "sql": "select \"Month\", \"Revenue\" from \"Sheet1\"",
-    "series": [
-      {
-        "name": "Sheet1!$B$1",
-        "categories": "Sheet1!$A$2:$A$10",
-        "values": "Sheet1!$B$2:$B$10"
-      }
-    ],
     "format": {
       "from": { "col": 4, "row": 1 },
       "to": { "col": 11, "row": 16 }
@@ -964,18 +1027,19 @@ Recommended request pattern:
    - chart.sql
    - chart.x_axis_name when the x-axis should be labeled
    - chart.y_axis_name when the y-axis should be labeled
-   - chart.series if the plotted range already exists in a worksheet
 ```
 
 Important backend rule:
 
-- `chart.sql` is the chart's stored source/query metadata.
-- If the chart should be driven by a computed SQL result table, use:
+- `chart.sql` is the preferred sheet-chart data source.
+- Do not include `chart.series` for normal sheet chart creation or revision.
+- Use `chart.series` only for explicit fixed-range charting requests.
+- If the user explicitly asks to materialize SQL results into a worksheet table before charting, use:
 
 ```
 1. POST /api/v1/excel/sql/compile
 2. POST /api/v1/excel/sql/write_result
-3. POST /api/v1/excel/add_chart with the same SQL in chart.sql and the written cell ranges in chart.series
+3. POST /api/v1/excel/add_chart with chart.sql, and add chart.series only if the user explicitly requires range-based charting
 ```
 
 Minimal example:
@@ -991,14 +1055,7 @@ Minimal example:
     "title": "Revenue by Region",
     "x_axis_name": "Region",
     "y_axis_name": "Revenue",
-    "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from \"Sales\" group by \"Region\" order by \"Revenue\" desc",
-    "series": [
-      {
-        "name": "ChartData!$B$1",
-        "categories": "ChartData!$A$2:$A$10",
-        "values": "ChartData!$B$2:$B$10"
-      }
-    ]
+    "sql": "select \"Region\", sum(\"Revenue\") as \"Revenue\" from \"Sales\" group by \"Region\" order by \"Revenue\" desc"
   }
 }
 ```
@@ -1014,8 +1071,8 @@ If you need to place `n` charts on one worksheet, use a dashboard layout instead
 
 - Prefer a dedicated worksheet such as `Dashboard` or `Charts`.
 - Keep source tables on the left or on separate worksheets; keep charts in a clean visual grid.
-- With the default chart size (`480x290`), a practical 2-column anchor pattern is `E2`, `M2`, `E18`, `M18`, `E34`, `M34`, ...
-- Leave at least 1 blank column and 2 blank rows between neighboring charts.
+- In the tested dashboard layout, a practical 2-column anchor pattern is `E2`, `M2`, `E18`, `M18`, `E34`, `M34`, ...
+- Leave at least 1 blank column and 1 blank row between neighboring chart bands.
 - Do not intentionally anchor multiple charts to the same `cell` unless you plan to manage them by `chart_id`.
 - For 1-3 charts, use a single column with larger charts.
 - For 4-8 charts, use a 2-column grid.
@@ -1045,10 +1102,20 @@ Use this template when the user asks to build a worksheet-level dashboard with m
 
 Dashboard structure:
 
+- Prefer keeping the visible dashboard area within columns `A:N` when possible.
+- One row should usually hold at most 2 charts, with a 1-column gap between them.
+- Use a 1-row vertical gap between chart bands. Do not use a 2-row gap unless the user explicitly wants extra whitespace.
 - Row 1: dashboard title or KPI summary
 - Rows 2+: chart grid
 - Keep raw data tables off the dashboard when possible
 - If the dashboard must reference local tables, place them far left or below the chart area
+
+Practical chart sizes in the tested dashboard grid:
+
+| type | columns | rows | pixels | aspect ratio |
+| --- | --- | --- | --- | --- |
+| Gauge | 3 columns | 8 rows | about `303x216` | about `1.4:1` |
+| Other charts | 6 columns | 16 rows | about `606x432` | about `1.4:1` |
 
 Column strategy:
 
@@ -1072,6 +1139,20 @@ right column anchors: M2, M18, M34, M50, ...
 left chart format:  from {col: 4,  row: r}  to {col: 11, row: r+15}
 right chart format: from {col: 12, row: r}  to {col: 19, row: r+15}
 where r = 1, 17, 33, 49, ...
+```
+
+Band template with 1-row gaps:
+
+```
+KPI Band 1:   rows 1-8,   from_row=1,  to_row=8
+gap:          row 9
+KPI Band 2:   rows 10-17, from_row=9,  to_row=16
+gap:          row 17
+Chart Band 1: rows 18-33, from_row=17, to_row=32
+gap:          row 33
+Chart Band 2: rows 34-49, from_row=33, to_row=48
+gap:          row 49
+Chart Band 3: rows 50-65, from_row=49, to_row=64
 ```
 
 Chart allocation rule:
@@ -1109,6 +1190,9 @@ Recommended chart grouping:
 - Top row: overview KPIs, trend, total distribution
 - Middle rows: segment comparisons such as region, product, channel
 - Lower rows: diagnostic or long-tail breakdown charts
+- Important trend charts such as visitors or revenue can take the full width (`cols 1-12`).
+- Comparison charts such as store share or product ranking work well as 2 side-by-side 6-column charts.
+- Multi-metric analysis charts such as radar comparisons usually deserve the full width.
 
 Copyable planning template:
 
@@ -1132,6 +1216,14 @@ Agent rule for dashboard authoring:
 - Give every chart a stable `chart_id`.
 - Use the same `cell` and `format` when revising a chart with `set_chart`.
 - After every 2-4 charts, run `read_sheet` and verify `formatting.charts`.
+
+#### Common Chart Mistakes
+
+- Do not pass `values` to `write_new_worksheet` when you only want to create an empty dashboard sheet. Send only `worksheet_name`.
+- Do not pass `series` or `series: []` for normal sheet charts. Prefer `chart.sql`.
+- Do not use a standard label-plus-value SQL result for a gauge chart. Prefer a single numeric value column.
+- Do not set `format.to.row_off` to a non-zero value in the tested dashboard layout.
+- Do not leave a 2-row vertical gap between chart bands if you want the compact dashboard layout described above.
 
 ---
 
@@ -1346,8 +1438,5 @@ Authorization: Bearer <token>
 - **Row/column indexing**: Row numbers are 1-indexed (row 1 = first data row). Columns use Excel letters (`A`, `B`, ...).
 - **Worksheet targeting is explicit**: If you do not pass `worksheet_name` or `?gid=` in `uri`, many endpoints fall back to the first worksheet. This is the common reason writes appear to go to `gid=0`.
 - **Header-aware tools are usually safer for agents**: `update_data_keep_headers` and `update_range_by_lookup` work with header names instead of raw column positions, which reduces mistakes when sheet layouts change.
-- **Chart inspection rule**: Use `read_sheet` to inspect `formatting.charts` before editing or deleting charts. This is where you get `chart_id`.
-- **Chart identity rule**: If a chart will be updated later, create it with `chart.chart_id` and keep reusing that same ID in `set_chart` and `delete_chart`.
-- **Chart payload rule**: Chart APIs use flat fields like `title`, `legend`, `x_axis_name`, and `y_axis_name`. Do not send nested Excelize objects like `{ "title": { "name": "..." } }`.
 - **Authentication**: Endpoints marked `AUTH` require `Authorization: Bearer <MAYBEAI_API_TOKEN>`. Public endpoints work without a token.
 - **Spreadsheet viewer URL**: `https://www.maybe.ai/docs/spreadsheets/d/{doc_id}` renders a live HTML preview of the file and is the same base format used for request `uri` values.
