@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
-description: "MaybeAI Sheet skill for full Excel/spreadsheet lifecycle management. Upload, read, edit, and analyze Excel files via the MaybeAI platform. Use when the user wants to: upload or import an Excel file, read spreadsheet data, inspect worksheet headers, update cell ranges, insert/delete rows or columns, manage worksheets, add charts or images, apply filters or conditional formatting, calculate formulas, generate SQL-assisted pivot/result tables, export files, manage versions, or perform any Excel data operation."
-version: 0.3.0
+description: "MaybeAI Sheet skill for full Excel/spreadsheet lifecycle management. Upload, read, edit, and analyze Excel files via the MaybeAI platform. Use when the user wants to: upload or import an Excel file, read spreadsheet data, inspect worksheet headers, update cell ranges, insert/delete rows or columns, manage worksheets, add charts or images, apply filters or conditional formatting, write or calculate formulas, generate SQL-assisted pivot/result tables, export files, manage versions, or perform any Excel data operation."
+version: 0.4.0
 metadata:
   openclaw:
     requires:
@@ -29,7 +29,7 @@ bash scripts/02-read-data.sh         # read sheet, list worksheets, versions
 bash scripts/03-write-data.sh        # update range, append rows, copy range
 bash scripts/04-rows-columns.sh      # insert/delete/move rows & columns, widths/heights
 bash scripts/05-worksheets.sh        # create, rename, move, duplicate, delete worksheets
-bash scripts/06-formulas.sh          # calc single/batch formulas, recalculate all
+bash scripts/06-formulas.sh          # set/calc formulas, recalculate all
 bash scripts/07-charts-pictures.sh   # add/edit/delete charts and pictures
 bash scripts/08-formatting.sh        # freeze panes, auto filter, conditional formats
 bash scripts/09-end-to-end.sh        # 3 complete workflow examples (upload→edit→export)
@@ -95,6 +95,7 @@ Authorization: Bearer <MAYBEAI_API_TOKEN>
 | "Freeze the header row" | `POST /api/v1/excel/freeze_panes` |
 | "Format one or more ranges" | `POST /api/v1/excel/batch_set_cell_style` |
 | "Add auto filter" | `POST /api/v1/excel/set_auto_filter` |
+| "Write formula =SUM(A2:B2) into C2" | `POST /api/v1/excel/formula/set` |
 | "Calculate formula =SUM(A1:A10)" | `POST /api/v1/excel/calc_formulas` |
 | "Build a pivot/result sheet from worksheet data" | `POST /api/v1/excel/sql/compile` then `POST /api/v1/excel/sql/write_result` |
 | "Export/download the file" | `GET /api/v1/excel/export/{document_id}` |
@@ -562,6 +563,28 @@ POST /api/v1/excel/list_worksheets_version
 
 ### Formulas
 
+#### Set Formula in Cell
+```
+POST /api/v1/excel/formula/set
+Authorization: Bearer <token>
+
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "Sheet1",
+  "cell": "C2",
+  "formula": "=SUM(A2:B2)",
+  "skip_recalculation": false
+}
+```
+
+Use this when the goal is to write a formula into the workbook and persist it in a target cell. This endpoint supports workbook-context calculation and returns the written cell plus the calculated value when available.
+
+Targeting guidance:
+
+- Prefer `worksheet_name` with `formula/set`.
+- Use `skip_recalculation: true` only when you intentionally want to defer a full recalculation pass.
+- Keep the formula string in standard Excel form such as `=SUM(A2:B2)`.
+
 #### Calculate Single Formula
 ```
 POST /api/v1/excel/calc-formula
@@ -583,6 +606,11 @@ Authorization: Bearer <token>
   ]
 }
 ```
+
+Endpoint choice:
+
+- Use `formula/set` to persist a formula into a worksheet cell.
+- Use `calc-formula` or `calc_formulas` for ad hoc evaluation, preview/debug workflows, or batch calculation helpers.
 
 #### Compile SQL for Pivot/Result Output
 ```
@@ -626,6 +654,15 @@ Default sequence:
 5. If compile succeeds, write the result block with `POST /api/v1/excel/sql/write_result`.
 6. Optionally verify the written output with `POST /api/v1/excel/read_sheet`.
 
+SQL dialect rule:
+
+- Write SQL in SQLite dialect for `sql/compile` and `sql/write_result`.
+- Prefer standard SQLite `select`, `where`, `group by`, `having`, `order by`, and `limit`.
+- Prefer SQLite functions such as `coalesce`, `ifnull`, `nullif`, `cast`, `round`, `substr`, `date`, `datetime`, and `strftime`.
+- Quote worksheet names and column names with double quotes when needed, for example `from "Sales Data"` or `select "Order Date"`.
+- Do not use MySQL-style backticks, SQL Server `TOP`, PostgreSQL `ILIKE`, or warehouse-specific syntax such as BigQuery arrays/structs.
+- When a query is non-trivial, always call `sql/compile` first before `sql/write_result`.
+
 Table naming rules:
 
 - SQL can reference a worksheet name directly.
@@ -634,7 +671,7 @@ Table naming rules:
 - Quote worksheet names when they contain spaces, for example `from "Sales Data"`.
 - Compile first to catch unsupported syntax or unsupported SQL features.
 
-Examples:
+Dialect examples:
 
 ```sql
 select "Region", sum("Revenue") as "Revenue"
@@ -649,6 +686,55 @@ from "Sales Data"
 group by "SKU"
 order by "Qty" desc
 ```
+
+Simple SQLite-style query:
+
+```sql
+select
+  "Region",
+  count(*) as "Row Count",
+  round(sum(coalesce("Revenue", 0)), 2) as "Revenue"
+from "Sales Data"
+where "Region" is not null
+group by "Region"
+order by "Revenue" desc
+limit 20
+```
+
+Join query:
+
+```sql
+select
+  s."SKU",
+  p."Product Name",
+  sum(coalesce(s."Qty", 0)) as "Total Qty",
+  round(sum(coalesce(s."Revenue", 0)), 2) as "Revenue"
+from "Sales Data" s
+left join "Products" p
+  on s."SKU" = p."SKU"
+group by s."SKU", p."Product Name"
+order by "Revenue" desc
+```
+
+WITH query:
+
+```sql
+with regional_sales as (
+  select
+    "Region",
+    sum(coalesce("Revenue", 0)) as revenue
+  from gid_2
+  group by "Region"
+)
+select
+  "Region",
+  round(revenue, 2) as "Revenue"
+from regional_sales
+where revenue > 0
+order by revenue desc
+```
+
+If a `WITH` query fails backend validation, rewrite it as an inline subquery and re-run `sql/compile`.
 
 Important limitations:
 

@@ -10,6 +10,20 @@ DOC_ID="${DOC_ID:?Please set DOC_ID}"
 DOC_URI="https://www.maybe.ai/docs/spreadsheets/d/$DOC_ID"
 DOC_URI_GID0="${DOC_URI}?gid=0"
 
+# ── Set Formula in Cell ───────────────────────────────────────────────────────
+echo "=== Set Formula in Cell ==="
+curl -s -X POST "$BASE_URL/api/v1/excel/formula/set" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"worksheet_name\": \"Sheet1\",
+    \"cell\": \"E2\",
+    \"formula\": \"=SUM(B2:D2)\",
+    \"skip_recalculation\": false
+  }" \
+  | jq .
+
 # ── Calculate Single Formula ──────────────────────────────────────────────────
 echo "=== Calc Single Formula ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/calc-formula" \
