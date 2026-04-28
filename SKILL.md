@@ -96,6 +96,7 @@ Authorization: Bearer <MAYBEAI_API_TOKEN>
 | "Format one or more ranges" | `POST /api/v1/excel/batch_set_cell_style` |
 | "Add auto filter" | `POST /api/v1/excel/set_auto_filter` |
 | "Write formula =SUM(A2:B2) into C2" | `POST /api/v1/excel/formula/set` |
+| "Keep a live SQL-driven result block that updates with source-sheet changes" | `POST /api/v1/excel/formula/set` with `=SQL("...")` |
 | "Calculate formula =SUM(A1:A10)" | `POST /api/v1/excel/calc_formulas` |
 | "Build a pivot/result sheet from worksheet data" | `POST /api/v1/excel/sql/compile` then `POST /api/v1/excel/sql/write_result` |
 | "Export/download the file" | `GET /api/v1/excel/export/{document_id}` |
@@ -584,6 +585,37 @@ Targeting guidance:
 - Prefer `worksheet_name` with `formula/set`.
 - Use `skip_recalculation: true` only when you intentionally want to defer a full recalculation pass.
 - Keep the formula string in standard Excel form such as `=SUM(A2:B2)`.
+- Use `formula/set` with `=SQL("...")` when the result should remain a live workbook formula instead of a one-time written result block.
+- SQL formulas can spill from the anchor cell across a result range, so choose an anchor cell and surrounding area that can be overwritten by the spill output.
+
+Live SQL formula example:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "Report",
+  "cell": "A1",
+  "formula": "=SQL(\"select \"\"Region\"\", sum(\"\"Revenue\"\") as \"\"Revenue\"\" from gid_2 group by \"\"Region\"\" order by \"\"Revenue\"\" desc\")",
+  "skip_recalculation": false
+}
+```
+
+Use this pattern when the report should update according to source worksheet changes. The SQL formula is stored in the workbook at the anchor cell and the calculated matrix spills into the adjacent range.
+
+Quoting rule for SQL formulas:
+
+- For raw SQL endpoints such as `sql/compile` and `sql/write_result`, use normal SQLite quoting like `"Region"` or `"店铺"`.
+- For `formula/set` with `=SQL("...")`, the SQL text lives inside an Excel string literal, so every inner `"` must be doubled to `""`.
+- Do not use `\"店铺\"` inside the SQL text of `=SQL("...")`. That is JSON-style escaping, not Excel-formula escaping.
+- If you send `formula/set` in JSON, remember there are two layers:
+  the Excel formula still needs doubled quotes inside the SQL text, and the JSON string serialization then escapes those quote characters for transport.
+
+Example:
+
+- Raw SQL for `sql/write_result`:
+  `select "店铺", "SPU分类" from gid_0`
+- SQL embedded in `formula/set`:
+  `=SQL("select ""店铺"", ""SPU分类"" from gid_0")`
 
 #### Calculate Single Formula
 ```
@@ -641,6 +673,8 @@ Authorization: Bearer <token>
 ```
 Execute SQL and write the pivot/result matrix into a worksheet.
 
+This is the snapshot path. It writes ordinary cell values into the target range, not a live SQL formula.
+
 #### SQL Pivot Workflow
 
 Use this for SQL-assisted pivot/result-table generation from worksheet data. Do not describe it as a general SQL engine on sheets. The recommended path is raw SQL authoring, compile-only validation, then dedicated result writing.
@@ -653,6 +687,13 @@ Default sequence:
 4. Validate SQL with `POST /api/v1/excel/sql/compile`.
 5. If compile succeeds, write the result block with `POST /api/v1/excel/sql/write_result`.
 6. Optionally verify the written output with `POST /api/v1/excel/read_sheet`.
+
+Static result versus live formula:
+
+- `sql/write_result` writes a static result matrix into cells.
+- If the source worksheet changes later, that written block is not itself a stored SQL formula.
+- Use `formula/set` with `=SQL("...")` when you want a live workbook formula anchored at a cell and expect the result to refresh with workbook recalculation after source-sheet updates.
+- Do not anchor a live SQL formula on top of cells you need to preserve. The anchor cell and spill range are expected to be overwritten by the SQL result block.
 
 SQL dialect rule:
 
