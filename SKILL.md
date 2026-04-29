@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
 description: "MaybeAI Sheet skill for full Excel/spreadsheet lifecycle management. Upload, read, edit, and analyze Excel files via the MaybeAI platform. Use when the user wants to: upload or import an Excel file, read spreadsheet data, inspect worksheet headers, update cell ranges, insert/delete rows or columns, manage worksheets, apply filters or conditional formatting, write or calculate formulas, generate SQL-assisted pivot/result tables, export files, manage versions, or perform any Excel data operation. Some chart-related capabilities exist, but chart and dashboard examples/workflows live in sheet-dashboard."
-version: 0.4.1
+version: 0.4.2
 metadata:
   openclaw:
     requires:
