@@ -12,6 +12,12 @@
 
 BASE_URL="https://play-be.omnimcp.ai"
 TOKEN="${MAYBEAI_API_TOKEN:?Please set MAYBEAI_API_TOKEN}"
+PAYLOAD_DIR="$(mktemp -d)"
+
+cleanup() {
+  rm -rf "$PAYLOAD_DIR"
+}
+trap cleanup EXIT
 
 echo "============================================================"
 echo " Workflow 1: Upload → Read → Update → Export"
@@ -102,25 +108,57 @@ curl -s -X POST "$BASE_URL/api/v1/excel/set_auto_filter" \
   -d "{\"uri\": \"$DOC_URI\", \"worksheet_name\": \"Summary\", \"auto_filter\": {\"ref\": \"A1:D4\"}}" \
   | jq .
 
-# Add a bar chart
-echo "[5/5] Adding revenue bar chart ..."
+# Add a JSON ECharts revenue chart
+echo "[5/5] Adding revenue chart ..."
+SUMMARY_CHART_PAYLOAD="$PAYLOAD_DIR/summary-chart.json"
+jq -n \
+  --arg uri "$DOC_URI" \
+  --arg worksheet_name "Summary" \
+  --arg cell "F2" \
+  --arg chart_id "summary-revenue-json-1" \
+  --arg title "Quarterly Revenue" \
+  --arg sql "SELECT \"Month\", \"Revenue\" FROM \"Summary\" ORDER BY \"Month\"" \
+  --arg html "{ library: 'echarts', handler: (data) => ({ title: { text: 'Quarterly Revenue' }, tooltip: { trigger: 'axis' }, xAxis: { type: 'category', data: data.map(item => item['Month']) }, yAxis: { type: 'value', name: 'Revenue' }, series: [{ type: 'bar', data: data.map(item => Number(item['Revenue']) || 0) }] }) }" \
+  '{
+    uri: $uri,
+    worksheet_name: $worksheet_name,
+    cell: $cell,
+    chart: {
+      chart_id: $chart_id,
+      type: "json",
+      title: $title,
+      width: 808,
+      height: 270,
+      sql: $sql,
+      spec: {
+        style: {
+          title: $title,
+          legend: "bottom"
+        },
+        boxAdaptation: {
+          showDataZoom: "auto"
+        }
+      },
+      html: $html,
+      series: [],
+      legend: "bottom",
+      x_axis_name: "Month",
+      y_axis_name: "Revenue",
+      format: {
+        from: { col: 5, row: 1, col_off: 0, row_off: 0 },
+        to: { col: 13, row: 11, col_off: 0, row_off: 0 },
+        lock_aspect_ratio: true,
+        offset_x: 0,
+        offset_y: 0,
+        scale_x: 1,
+        scale_y: 1
+      }
+    }
+  }' > "$SUMMARY_CHART_PAYLOAD"
 curl -s -X POST "$BASE_URL/api/v1/excel/add_chart" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{
-    \"uri\": \"$DOC_URI\",
-    \"worksheet_name\": \"Summary\",
-    \"cell\": \"F2\",
-    \"chart\": {
-      \"type\": \"bar\",
-      \"series\": [{
-        \"name\": \"Revenue\",
-        \"categories\": \"Summary!\$A\$2:\$A\$4\",
-        \"values\": \"Summary!\$B\$2:\$B\$4\"
-      }],
-      \"title\": {\"name\": \"Quarterly Revenue\"}
-    }
-  }" | jq .
+  --data-binary "@$SUMMARY_CHART_PAYLOAD" | jq .
 
 echo ""
 echo "============================================================"
