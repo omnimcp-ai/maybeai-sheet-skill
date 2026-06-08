@@ -25,6 +25,7 @@ Ready-to-run curl examples are in the [`scripts/`](./scripts/) folder. Each scri
 ```bash
 export MAYBEAI_API_TOKEN=your_token_here
 export DOC_ID=your_document_id_here          # needed by most scripts
+export UPLOAD_USER_ID=demo-user              # optional compatibility field for upload only
 
 bash scripts/01-file-management.sh   # upload, import, list, rename, delete, export
 bash scripts/02-read-data.sh         # read sheet, list worksheets, versions
@@ -116,9 +117,10 @@ POST /api/v1/excel/upload
 Content-Type: multipart/form-data
 
 file: <xlsx file>
-user_id: (optional)
+Authorization: Bearer <MAYBEAI_API_TOKEN>
+user_id: (optional compatibility field)
 ```
-Returns `{ document_id, uri, ... }`. Use `document_id` (also called `uri`) in all subsequent calls.
+Authentication is driven by `MAYBEAI_API_TOKEN`. `user_id` may still be passed for compatibility, but upload should not depend on it. Returns `{ document_id, uri, ... }`. Use `document_id` (also called `uri`) in all subsequent calls.
 
 #### Import File by URL
 ```
