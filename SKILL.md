@@ -97,6 +97,7 @@ Authorization: Bearer <MAYBEAI_API_TOKEN>
 | "Delete a chart" | `POST /api/v1/excel/delete_chart` |
 | "Freeze the header row" | `POST /api/v1/excel/freeze_panes` |
 | "Format one or more ranges" | `POST /api/v1/excel/batch_set_cell_style` |
+| "Filter rows while reading" | `POST /api/v1/excel/read_sheet` with `filter_tokens` or read-only `auto_filter` |
 | "Add auto filter" | `POST /api/v1/excel/set_auto_filter` |
 | "Write formula =SUM(A2:B2) into C2" | `POST /api/v1/excel/formula/set` |
 | "Keep a live SQL-driven result block that updates with source-sheet changes" | `POST /api/v1/excel/formula/set` with `=SQL("...")` |
@@ -214,6 +215,49 @@ POST /api/v1/excel/read_sheet
 { "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>", "worksheet_name": "Sheet1" }
 ```
 Returns all cell data from the specified worksheet.
+
+Optional read controls:
+
+- `range_address`: A1 range such as `"A1:F100"` or `"Sheet1!A1:F100"`.
+- `value_render_option`: `FORMATTED_VALUE` (default), `UNFORMATTED_VALUE`, or `FORMULA`.
+- `filter_tokens`: simple read-time row filters. Use tokens shaped as `<header>_<op>_<value>`, where `op` is `eq`, `lt`, `lte`, `gt`, or `gte`. Examples: `"Status_eq_Active"`, `"Amount_gte_100"`.
+- `auto_filter`: explicit read-only filter criteria to apply for this request. This does not persist workbook auto-filter settings.
+
+Use read-time filters when the user asks to view, inspect, summarize, export, or calculate over a filtered subset and does not explicitly ask to change workbook filter UI. Do **not** call `set_auto_filter` just to filter rows returned by `read_sheet`.
+
+Example using simple filter tokens:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "Sheet1",
+  "filter_tokens": ["Status_eq_Active", "Amount_gte_100"]
+}
+```
+
+Example using read-only `auto_filter` criteria:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "Sheet1",
+  "auto_filter": {
+    "ref": "A1:F100",
+    "filter_columns": [
+      {
+        "col_id": 2,
+        "filters": {
+          "filter_values": ["North", "West"]
+        }
+      }
+    ]
+  }
+}
+```
+
+`auto_filter.filter_columns[].col_id` is zero-based within the filter range. Supported read-only criteria include exact value lists via `filters.filter_values`, blanks via `filters.blank`, and `custom_filters.items` operators such as `equal`, `notEqual`, `lessThan`, `lessThanOrEqual`, `greaterThan`, `greaterThanOrEqual`, `containsText`, `beginsWith`, and `endsWith`.
+
+Normal `read_sheet` calls may return saved worksheet auto-filter metadata in `formatting.auto_filter`, but saved filters are not applied unless explicit read-time filters are provided.
 
 `read_sheet` also returns worksheet formatting metadata. For chart work, inspect:
 
@@ -990,6 +1034,8 @@ Authorization: Bearer <token>
   }
 }
 ```
+
+Use this only when the user asks to create or change the workbook's persisted auto-filter UI. For temporary row filtering, use `read_sheet` with `filter_tokens` or a read-only `auto_filter` object instead.
 
 #### Remove Auto Filter
 ```
