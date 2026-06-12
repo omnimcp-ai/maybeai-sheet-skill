@@ -36,6 +36,7 @@ bash scripts/06-formulas.sh          # set/calc formulas, recalculate all
 bash scripts/07-charts-pictures.sh   # chart/picture API examples
 bash scripts/08-formatting.sh        # freeze panes, auto filter, conditional formats
 bash scripts/09-end-to-end.sh        # 3 complete workflow examples (upload→edit→export)
+bash scripts/10-permissions-sharing.sh  # visibility, sharing, permission checks
 ```
 
 > **Requires**: `curl` and `jq`. Install jq with `brew install jq` (macOS) or `apt install jq` (Linux).
@@ -105,6 +106,33 @@ Authorization: Bearer <MAYBEAI_API_TOKEN>
 | "Build a pivot/result sheet from worksheet data" | `POST /api/v1/excel/sql/compile` then `POST /api/v1/excel/sql/write_result` |
 | "Export/download the file" | `GET /api/v1/excel/export/{document_id}` |
 | "Copy this spreadsheet" | `POST /api/v1/excel/copy_excel` |
+| "Make this sheet public/private" | `POST /api/v1/share/sheet/visibility` |
+| "Share this sheet with alice@example.com" | `POST /api/v1/share/sheet/update-permission` |
+| "Who has access to this sheet?" | `POST /api/v1/share/sheet/list` |
+| "What permission do I have on this sheet?" | `POST /api/v1/share/sheet/permission` |
+
+---
+
+## Permission & Sharing
+
+Use sharing APIs when the task is about access control rather than spreadsheet contents.
+
+- Full reference: [`references/permission-sharing.md`](./references/permission-sharing.md)
+- Ready-to-run examples: [`scripts/10-permissions-sharing.sh`](./scripts/10-permissions-sharing.sh)
+
+Typical intents:
+
+- make a sheet public or private
+- set public access to `viewer` or `editor`
+- grant `viewer` or `editor` access to a specific email
+- remove a user's access
+- list current shares or confirm the current user's effective permission
+
+Input rules:
+
+- `sheet_id` accepts either a raw document id or a full Maybe Sheet URL
+- visibility and permission mutations require the current user to be the sheet owner
+- use `gid: null` unless a more specific permission scope is explicitly needed
 
 ---
 
