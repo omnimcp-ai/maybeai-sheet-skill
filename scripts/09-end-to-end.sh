@@ -8,10 +8,14 @@
 #
 # Usage:
 #   export MAYBEAI_API_TOKEN=your_token_here
+#   export EXCEL_FILE_PATH=/absolute/path/to/file.xlsx
+#   export UPLOAD_USER_ID=demo-user   # optional compatibility field
 #   bash 09-end-to-end.sh
 
 BASE_URL="https://play-be.omnimcp.ai"
 TOKEN="${MAYBEAI_API_TOKEN:?Please set MAYBEAI_API_TOKEN}"
+EXCEL_FILE_PATH="${EXCEL_FILE_PATH:-./sample.xlsx}"
+UPLOAD_USER_ID="${UPLOAD_USER_ID:-}"
 PAYLOAD_DIR="$(mktemp -d)"
 
 cleanup() {
@@ -24,10 +28,17 @@ echo " Workflow 1: Upload → Read → Update → Export"
 echo "============================================================"
 
 # Step 1: Upload
-echo "[1/4] Uploading sample.xlsx ..."
-UPLOAD_RESP=$(curl -s -X POST "$BASE_URL/api/v1/excel/upload" \
-  -F "file=@./sample.xlsx" \
-  -F "user_id=demo")
+echo "[1/4] Uploading ${EXCEL_FILE_PATH} ..."
+UPLOAD_CURL_ARGS=(
+  -s
+  -X POST "$BASE_URL/api/v1/excel/upload"
+  -H "Authorization: Bearer $TOKEN"
+  -F "file=@${EXCEL_FILE_PATH}"
+)
+if [ -n "$UPLOAD_USER_ID" ]; then
+  UPLOAD_CURL_ARGS+=(-F "user_id=${UPLOAD_USER_ID}")
+fi
+UPLOAD_RESP=$(curl "${UPLOAD_CURL_ARGS[@]}")
 echo "$UPLOAD_RESP" | jq .
 DOC_ID=$(echo "$UPLOAD_RESP" | jq -r '.document_id // ((.uri // "") | split("/d/") | last | split("?") | first)')
 DOC_URI=$(echo "$UPLOAD_RESP" | jq -r '.uri // empty')
