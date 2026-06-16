@@ -403,6 +403,7 @@ Authorization: Bearer <token>
 - Use `update_range_by_lookup` when you need upsert behavior: update rows that match a key and append rows that do not exist yet.
 - Use `update_range` when you truly need exact A1 targeting such as `B7:D12`, header rewrites, or non-tabular cell edits.
 - Use `batch_set_cell_style` for visual formatting on one or more ranges. Even a single range must be sent as `range_addresses: ["B2:B100"]`.
+- Keep data writes and style writes separate. Do not expect `write_new_worksheet`, `update_range`, `append_rows`, or `sql/write_result` to apply presentation styling automatically.
 - For non-first worksheets, always set `worksheet_name` or `uri?gid=N` explicitly. Otherwise writes can land on the first sheet.
 
 #### Agent-friendly patterns
@@ -415,6 +416,9 @@ Authorization: Bearer <token>
   If the sheet has computed columns like `Total` or `Margin`, prefer `update_data_keep_headers` with `preserve_formulas: true` or `update_range_by_lookup`, which avoids overwriting existing formula cells.
 - Simpler styling for agents:
   Prefer `batch_set_cell_style` over low-level Excel style objects or style IDs. It fits common LLM-safe actions like date formatting, currency formatting, header emphasis, alignment, and wrap text.
+- Friendly report/table output:
+  When the user asks for a report, management review table, dashboard support table, or "make it easy to read", write the data first, then do a small styling pass with `batch_set_cell_style`, `freeze_panes`, and optional width/height APIs. This preserves API clarity while producing a sheet that looks closer to a locally formatted Excel file.
+  Do not add styling when the user explicitly asks for raw/plain data only.
 
 #### Write New Sheet (creates a new workbook)
 ```
@@ -1024,6 +1028,100 @@ Use only the simplified `style` keys:
 
 This API applies only the specified keys and preserves existing unspecified style properties.
 
+#### Friendly table styling after writes
+Use this after `write_new_worksheet`, `update_range`, or `sql/write_result` when the user expects a readable report table rather than raw cells.
+
+Recommended sequence:
+1. Write the values first.
+2. Determine the used range, either from the data dimensions you wrote or from `read_sheet`.
+3. Freeze the header row.
+4. Apply a header style to row 1.
+5. Apply section-row and total-row styles only to known rows, not the whole table.
+6. Apply numeric alignment/formatting to measure columns.
+7. Optionally set column widths and row heights.
+8. Read back a small range to verify the style metadata when needed.
+9. Check style responses for `source_info.styles_ignored=true`. If present, the worksheet is likely PG-backed with no style engine; explain that styles were ignored or recreate the report on an Excelize-backed workbook.
+
+Example for a finance-style table like:
+`科目 | 期末余额 | 期初余额 | 变动额 | 变动率 | 占比 | 备注`
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "资产负债分析",
+  "range_addresses": ["A1:G1"],
+  "style": {
+    "bold": true,
+    "font_color": "#FFFFFF",
+    "bg_color": "#173E56",
+    "horizontal": "center",
+    "vertical": "middle",
+    "wrap_text": true
+  }
+}
+```
+
+Section rows such as `流动资产` can use a lighter blue:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "资产负债分析",
+  "range_addresses": ["A2:G2"],
+  "style": {
+    "bold": true,
+    "font_color": "#FFFFFF",
+    "bg_color": "#2E91C8"
+  }
+}
+```
+
+Total rows can use gray fill and bold text:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "资产负债分析",
+  "range_addresses": ["A9:G9"],
+  "style": {
+    "bold": true,
+    "bg_color": "#E8ECEF"
+  }
+}
+```
+
+Numeric columns should be right-aligned and formatted separately:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "资产负债分析",
+  "range_addresses": ["B2:D100"],
+  "style": {
+    "format": "decimal",
+    "format_code": "#,##0",
+    "horizontal": "right"
+  }
+}
+```
+
+Percent columns should use percent formatting:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<document_id>",
+  "worksheet_name": "资产负债分析",
+  "range_addresses": ["E2:F100"],
+  "style": {
+    "format": "percent",
+    "format_code": "0.0%",
+    "horizontal": "right"
+  }
+}
+```
+
+Keep the styling pass small. Avoid per-cell styling unless the user explicitly asks for pixel-level formatting; prefer row ranges, column ranges, and a few semantic rows such as section headers and totals.
+
 #### Set Auto Filter
 ```
 POST /api/v1/excel/set_auto_filter
@@ -1121,6 +1219,23 @@ Authorization: Bearer <token>
 5. Read back to verify: POST /api/v1/excel/read_sheet
 ```
 
+### Workflow 6: Create a readable report worksheet
+
+Use this when creating a new report-style worksheet, especially management, finance, KPI, pivot, or summary tables. Keep `write_new_worksheet` data-only, then call formatting endpoints explicitly.
+
+```
+1. Write data: POST /api/v1/excel/write_new_worksheet
+2. Freeze header: POST /api/v1/excel/freeze_panes  {"freeze_rows": 1}
+3. Style header row: POST /api/v1/excel/batch_set_cell_style  {"range_addresses": ["A1:G1"], "style": {"bold": true, "font_color": "#FFFFFF", "bg_color": "#173E56", "horizontal": "center", "wrap_text": true}}
+4. Style semantic rows: POST /api/v1/excel/batch_set_cell_style for section rows like ["A2:G2"] and total rows like ["A9:G9"]
+5. Format measure columns: POST /api/v1/excel/batch_set_cell_style for numeric and percent columns
+6. Optional widths/heights: POST /api/v1/excel/set_columns_width and /set_rows_height
+7. Check style responses for `source_info.styles_ignored=true`; if true, tell the user styles were ignored by the current worksheet engine
+8. Verify: POST /api/v1/excel/read_sheet with a small range such as A1:G12
+```
+
+Do not run this workflow when the user asks for raw data, exact import fidelity, or no styling changes.
+
 ---
 
 ## Notes
@@ -1130,7 +1245,9 @@ Authorization: Bearer <token>
 - **SQL table references**: Use either the worksheet name or `gid_*`. Quote worksheet names with spaces, for example `"Sales Data"`.
 - **Range format**: Use Excel-style ranges like `A1`, `A1:B10`, `A:A`.
 - **Style API rule**: Use only `batch_set_cell_style` for cell formatting. For a single target range, still send `range_addresses` as a one-item array.
+- **Data/style separation rule**: Keep `write_new_worksheet`, `update_range`, and `sql/write_result` focused on data. If a polished table is needed, call `batch_set_cell_style`, `freeze_panes`, and width/height endpoints afterward.
 - **Style input rule**: Keep style payloads small and explicit. Prefer keys like `format`, `bold`, `bg_color`, `horizontal`, and `wrap_text` instead of low-level Excel style structures.
+- **Style no-op rule**: If a style endpoint returns `source_info.styles_ignored=true`, the current worksheet engine did not apply styles. Do not claim styling succeeded; explain the limitation or use an Excelize-backed workbook for styled report output.
 - **Row/column indexing**: Row numbers are 1-indexed (row 1 = first data row). Columns use Excel letters (`A`, `B`, ...).
 - **Worksheet targeting is explicit**: If you do not pass `worksheet_name` or `?gid=` in `uri`, many endpoints fall back to the first worksheet. This is the common reason writes appear to go to `gid=0`.
 - **Header-aware tools are usually safer for agents**: `update_data_keep_headers` and `update_range_by_lookup` work with header names instead of raw column positions, which reduces mistakes when sheet layouts change.

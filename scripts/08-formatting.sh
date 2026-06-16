@@ -70,6 +70,89 @@ curl -s -X POST "$BASE_URL/api/v1/excel/batch_set_cell_style" \
   }" \
   | jq .
 
+# Friendly finance/report table styling.
+# Keep write_new_worksheet data-only, then run a small explicit style pass.
+# Example layout: 科目 | 期末余额 | 期初余额 | 变动额 | 变动率 | 占比 | 备注
+# If any response contains source_info.styles_ignored=true, the worksheet engine
+# did not apply styles (commonly PG-backed sheets with style_engine=none).
+echo "=== Friendly Report Table Style (header, section, totals, numeric columns) ==="
+curl -s -X POST "$BASE_URL/api/v1/excel/batch_set_cell_style" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"worksheet_name\": \"Sheet1\",
+    \"range_addresses\": [\"A1:G1\"],
+    \"style\": {
+      \"bold\": true,
+      \"font_color\": \"#FFFFFF\",
+      \"bg_color\": \"#173E56\",
+      \"horizontal\": \"center\",
+      \"vertical\": \"middle\",
+      \"wrap_text\": true
+    }
+  }" \
+  | jq .
+
+curl -s -X POST "$BASE_URL/api/v1/excel/batch_set_cell_style" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"worksheet_name\": \"Sheet1\",
+    \"range_addresses\": [\"A2:G2\"],
+    \"style\": {
+      \"bold\": true,
+      \"font_color\": \"#FFFFFF\",
+      \"bg_color\": \"#2E91C8\"
+    }
+  }" \
+  | jq .
+
+curl -s -X POST "$BASE_URL/api/v1/excel/batch_set_cell_style" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"worksheet_name\": \"Sheet1\",
+    \"range_addresses\": [\"A9:G9\"],
+    \"style\": {
+      \"bold\": true,
+      \"bg_color\": \"#E8ECEF\"
+    }
+  }" \
+  | jq .
+
+curl -s -X POST "$BASE_URL/api/v1/excel/batch_set_cell_style" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"worksheet_name\": \"Sheet1\",
+    \"range_addresses\": [\"B2:D100\"],
+    \"style\": {
+      \"format\": \"decimal\",
+      \"format_code\": \"#,##0\",
+      \"horizontal\": \"right\"
+    }
+  }" \
+  | jq .
+
+curl -s -X POST "$BASE_URL/api/v1/excel/batch_set_cell_style" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"worksheet_name\": \"Sheet1\",
+    \"range_addresses\": [\"E2:F100\"],
+    \"style\": {
+      \"format\": \"percent\",
+      \"format_code\": \"0.0%\",
+      \"horizontal\": \"right\"
+    }
+  }" \
+  | jq .
+
 # ── Set Auto Filter ───────────────────────────────────────────────────────────
 echo "=== Set Auto Filter ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/set_auto_filter" \
