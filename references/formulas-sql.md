@@ -143,6 +143,22 @@ order by "Revenue" desc
 1. `write_new_worksheet`
 2. Write the raw SQL and validate it with `sql/compile`
 3. Use `formula/set` to write `=SQL("...")`
+
+Raw SQL for `sql/compile`:
+
+```sql
+select "Region", sum("Revenue") as "Revenue"
+from "Orders"
+group by "Region"
+order by "Revenue" desc
+```
+
+Formula text for `formula/set`:
+
+```text
+=SQL("select ""Region"", sum(""Revenue"") as ""Revenue"" from ""Orders"" group by ""Region"" order by ""Revenue"" desc")
+```
+
 4. By default, that request calculates and writes the target formula result
 5. If you explicitly skipped recalculation, or if other formulas depend on this result block, call `recalculate_formulas`
 6. `read_sheet`

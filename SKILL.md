@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
 description: "Manages MaybeAI spreadsheets across upload, read/write, worksheet operations, formulas, formatting, and SQL result-table workflows. Use when working on Excel or spreadsheet tasks in MaybeAI, including file import, worksheet inspection, cell or range updates, row or column changes, formula execution, readable report sheets, sharing, or export. Use sheet-dashboard instead for chart-authoring or dashboard-first workflows."
-version: 0.6.0
+version: 0.6.1
 metadata:
   openclaw:
     requires:
