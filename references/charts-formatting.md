@@ -1,40 +1,40 @@
 # Charts and Formatting Reference
 
-## 目录
+## Contents
 
-1. 适用场景
-2. 图表边界
-3. 低层图表与图片 API
-4. 样式与冻结
-5. 报表美化最小流程
+1. When to use this
+2. Chart scope
+3. Low-level chart and picture APIs
+4. Styling and freezing
+5. Minimal report-polish flow
 
-## 1. 适用场景
+## 1. When to use this
 
-当任务涉及低层图表 API、图片、冻结窗格、单元格样式、自动筛选、条件格式时，读这份文档。
+Read this document when the task involves low-level chart APIs, pictures, frozen panes, cell styles, autofilter, or conditional formatting.
 
-## 2. 图表边界
+## 2. Chart scope
 
-这个 skill 只覆盖底层表格能力和低层图表 API。
+This skill only covers low-level spreadsheet capabilities and low-level chart APIs.
 
-以下情况应切换到 `sheet-dashboard`：
+Switch to `sheet-dashboard` when:
 
-- 图表编排是主任务
-- dashboard 版面和讲故事是主任务
-- 需要图表布局、样式体系、仪表板工作流
+- chart composition is the main task
+- dashboard layout and storytelling are the main task
+- you need chart layout systems, visual systems, or dashboard workflows
 
-如果只是：
+If you only need to:
 
-- 查看已有图表元数据
-- 调底层 add/set/delete chart
-- 绑定 chart 到已有 sheet
+- inspect existing chart metadata
+- call low-level add/set/delete chart APIs
+- bind a chart to an existing sheet
 
-本 skill 足够。
+then this skill is sufficient.
 
-脚本：`scripts/07-charts-pictures.sh`
+Script: `scripts/07-charts-pictures.sh`
 
-## 3. 低层图表与图片 API
+## 3. Low-level chart and picture APIs
 
-相关端点：
+Related endpoints:
 
 ```text
 POST /api/v1/excel/add_chart
@@ -45,14 +45,14 @@ POST /api/v1/excel/read_picture
 POST /api/v1/excel/delete_picture
 ```
 
-建议：
+Guidance:
 
-- 先 `read_sheet` 看 `formatting.charts` / `formatting.pictures`
-- 改已有图表前，先确认 `chart_id`、锚点 cell、worksheet
+- Use `read_sheet` first to inspect `formatting.charts` and `formatting.pictures`
+- Before editing an existing chart, confirm `chart_id`, the anchor cell, and the worksheet
 
-## 4. 样式与冻结
+## 4. Styling and freezing
 
-核心端点：
+Core endpoints:
 
 ```text
 POST /api/v1/excel/freeze_panes
@@ -64,11 +64,11 @@ POST /api/v1/excel/set_columns_width
 POST /api/v1/excel/set_rows_height
 ```
 
-重要规则：
+Important rules:
 
-- 单个区域也要用 `range_addresses: ["A1:G1"]`
-- 样式 payload 保持小而明确
-- 优先用高层样式键：
+- Even a single range should use `range_addresses: ["A1:G1"]`
+- Keep style payloads small and explicit
+- Prefer high-level style keys:
   - `format`
   - `bold`
   - `bg_color`
@@ -76,27 +76,27 @@ POST /api/v1/excel/set_rows_height
   - `horizontal`
   - `wrap_text`
 
-## 5. 报表美化最小流程
+## 5. Minimal report-polish flow
 
-适合用户说“做得更像管理报表”“加可读性”“加表头样式”。
+Use this when the user asks for something like “make it look more like a management report”, “improve readability”, or “style the header row”.
 
-1. 先写数据
+1. Write the data first
 2. `freeze_panes`
-3. `batch_set_cell_style` 设表头样式
-4. `batch_set_cell_style` 设重点行/汇总行
+3. `batch_set_cell_style` for header styling
+4. `batch_set_cell_style` for highlighted rows or totals
 5. `set_columns_width` / `set_rows_height`
-6. 必要时 `set_auto_filter`
-7. `read_sheet` 回读
+6. Optionally `set_auto_filter`
+7. `read_sheet` to verify
 
-如果响应里出现：
+If the response includes:
 
 ```text
 source_info.styles_ignored=true
 ```
 
-要明确告诉用户当前 worksheet 引擎没有应用样式，不能宣称已完成美化。
+you must explicitly tell the user that the current worksheet engine did not apply the styles. Do not claim the styling work is complete.
 
-脚本：
+Scripts:
 
 - `scripts/07-charts-pictures.sh`
 - `scripts/08-formatting.sh`

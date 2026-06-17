@@ -14,9 +14,9 @@ metadata:
 
 # MaybeAI Sheet
 
-Use this skill for MaybeAI spreadsheet lifecycle work: upload/import files, inspect sheets, read and write data, manage worksheets, run formulas, build SQL result sheets, apply lightweight formatting, share, and export.
+Use this skill for MaybeAI spreadsheet lifecycle work: upload or import files, inspect worksheets, read and write data, manage worksheets, run formulas, build SQL result sheets, apply lightweight formatting, share, and export.
 
-Do not use this skill as the primary workflow for chart-authoring or dashboard composition. For dashboard-first work, use `sheet-dashboard`.
+Do not use this skill as the primary workflow for chart authoring or dashboard composition. For dashboard-first work, use `sheet-dashboard`.
 
 ## Quick Start
 
@@ -59,149 +59,149 @@ bash scripts/09-end-to-end.sh
 
 | User intent | Recommended path |
 |---|---|
-| 上传或导入 Excel | `references/file-management.md` |
-| 查看工作表、读表头、抽样看数据 | `references/read-write.md` |
-| 替换表格数据但保留表头/公式 | `references/read-write.md` |
-| 按业务主键更新或追加行 | `references/read-write.md` |
-| 插入/删除/移动行列，管理 worksheet | `references/read-write.md` |
-| 写公式、重算、生成 SQL 结果表 | `references/formulas-sql.md` |
-| 加轻量样式、冻结表头、自动筛选 | `references/charts-formatting.md` |
-| 排查鉴权、写错 sheet、样式不生效、SQL 编译失败 | `references/errors-recovery.md` |
-| 做图表或 dashboard 版面 | 转到 `sheet-dashboard`；本 skill 只覆盖底层表格和低层图表 API |
+| Upload or import Excel files | `references/file-management.md` |
+| Inspect worksheets, read headers, sample data | `references/read-write.md` |
+| Replace table data while keeping headers or formulas | `references/read-write.md` |
+| Update or append rows by business key | `references/read-write.md` |
+| Insert, delete, or move rows and columns; manage worksheets | `references/read-write.md` |
+| Write formulas, recalculate, build SQL result tables, or create live `=SQL(...)` reports | `references/formulas-sql.md` / `references/sql-formula-showcase.md` |
+| Apply lightweight styling, freeze panes, or add autofilter | `references/charts-formatting.md` |
+| Troubleshoot auth, wrong-sheet writes, ignored styles, or SQL compile errors | `references/errors-recovery.md` |
+| Build chart-heavy pages or dashboards | Switch to `sheet-dashboard`; this skill only covers low-level spreadsheet and chart APIs |
 
 ## Core Rules
 
-### 1. 先选 worksheet，再读写
+### 1. Choose the worksheet before you read or write
 
-对非首个工作表，不要依赖默认行为。
+Do not rely on defaults for non-first worksheets.
 
-- 端点支持时优先传 `worksheet_name`
-- 某些端点必须在 `uri` 上追加 `?gid=<index>`
-- 若两者都不传，很多调用会落到第一张表，也就是常见的“写到错 sheet”
+- Prefer `worksheet_name` when the endpoint supports it
+- Some endpoints require `?gid=<index>` in `uri`
+- If you pass neither, many calls will land on the first worksheet, which causes classic “wrote to the wrong sheet” failures
 
-详细规则见 `references/read-write.md`。
+See `references/read-write.md` for details.
 
-### 2. 先选高层 API，再退回底层 A1 写入
+### 2. Prefer high-level write APIs before raw A1 writes
 
-优先级：
+Priority order:
 
 1. `update_data_keep_headers`
 2. `update_range_by_lookup`
 3. `append_rows`
 4. `update_range`
 
-含义：
+Meaning:
 
-- “保留表头和列顺序，整表替换” 用 `update_data_keep_headers`
-- “按主键更新并自动追加新行” 用 `update_range_by_lookup`
-- “简单追加对象行” 用 `append_rows`
-- “必须精确改 A1 区域或非表格单元格” 才用 `update_range`
+- Use `update_data_keep_headers` for full-table replacement while preserving headers and column order
+- Use `update_range_by_lookup` for key-based updates with automatic append of new rows
+- Use `append_rows` for simple object-row appends
+- Use `update_range` only when you must target an exact A1 range or non-tabular cells
 
-### 3. 数据写入和样式写入分开
+### 3. Separate data writes from style writes
 
-不要假设 `write_new_worksheet`、`update_range`、`sql/write_result` 会自动带格式。
+Do not assume `write_new_worksheet`, `update_range`, or `sql/write_result` will automatically apply formatting.
 
-如果用户要“可读报表”或“管理层表格”：
+If the user wants a readable report or manager-facing table:
 
-1. 先写数据
-2. 再调用 `freeze_panes`
-3. 再调用 `batch_set_cell_style`
-4. 必要时再调列宽/行高/自动筛选
+1. Write the data first
+2. Call `freeze_panes`
+3. Call `batch_set_cell_style`
+4. Optionally set column widths, row heights, and autofilter
 
-详细样式套路见 `references/charts-formatting.md`。
+See `references/charts-formatting.md` for the style playbook.
 
-### 4. SQL 结果表先编译再落表
+### 4. Compile SQL before writing a result sheet
 
-SQL 透视/结果表流程默认是：
+Default SQL result-table flow:
 
 1. `read_headers`
-2. 必要时 `read_sheet` 抽样
+2. Optionally `read_sheet` for sampling
 3. `sql/compile`
 4. `sql/write_result`
-5. `read_sheet` 回读验证
+5. `read_sheet` to verify the result
 
-不要直接跳过 `sql/compile`。
+Do not skip `sql/compile`.
 
-### 5. 写后必须回读验证
+### 5. Always read back after writing
 
-至少做其中之一：
+Do at least one of the following:
 
 - `read_sheet`
 - `list_worksheets`
 - `read_headers`
-- 导出文件再人工检查
+- Export the file and inspect it manually
 
-尤其是以下情况必须验证：
+Verification is especially required after:
 
-- SQL 结果表
-- 非首个 worksheet 写入
-- 保留公式/样式的覆盖更新
-- 图表、图片、样式相关改动
+- SQL result-table writes
+- Writes to non-first worksheets
+- Overwrite flows that preserve formulas or styles
+- Chart, image, or style changes
 
 ## Agent-Safe Playbooks
 
-### 上传并检查文件
+### Upload and inspect a file
 
-1. 上传或导入文件
-2. 拿到 `document_id` / `uri`
+1. Upload or import the file
+2. Capture `document_id` and `uri`
 3. `list_worksheets`
 4. `read_headers`
-5. 必要时 `read_sheet` 看小范围样本
+5. Optionally `read_sheet` for a small sample
 
-参考：
+References:
 
 - `references/file-management.md`
 - `references/read-write.md`
 - `scripts/01-file-management.sh`
 - `scripts/02-read-data.sh`
 
-### 保留表头和公式，刷新整张表
+### Refresh a table while keeping headers and formulas
 
-1. 明确目标 worksheet
-2. 用 `update_data_keep_headers`
-3. 若有计算列，设置 `preserve_formulas: true`
-4. `read_sheet` 回读
+1. Identify the target worksheet
+2. Use `update_data_keep_headers`
+3. If the sheet has computed columns, set `preserve_formulas: true`
+4. `read_sheet` to verify
 
-参考：
+References:
 
 - `references/read-write.md`
 - `scripts/03-write-data.sh`
 
-### 按主键同步业务记录
+### Sync business records by key
 
-1. 确认 key 列，如 `Order ID` / `SKU`
-2. 用 `update_range_by_lookup`
-3. 如需重算，再调 `recalculate_formulas`
-4. `read_sheet` 验证结果
+1. Identify the key column, such as `Order ID` or `SKU`
+2. Use `update_range_by_lookup`
+3. If you need workbook-wide downstream recalculation, call `recalculate_formulas`
+4. `read_sheet` to verify
 
-参考：
+References:
 
 - `references/read-write.md`
 - `references/formulas-sql.md`
 
-### 生成 SQL 结果表
+### Build an SQL result sheet
 
-1. 查 worksheet 名或 gid
+1. Identify the worksheet name or gid
 2. `read_headers`
-3. 写 SQLite 风格 SQL
+3. Write PostgreSQL-compatible worksheet SQL
 4. `sql/compile`
 5. `sql/write_result`
-6. `read_sheet` 验证输出
+6. `read_sheet` to verify the output
 
-参考：
+References:
 
 - `references/formulas-sql.md`
 - `scripts/06-formulas.sh`
 
-### 输出可读报表 worksheet
+### Produce a readable report worksheet
 
-1. 用 `write_new_worksheet` 或数据写入 API 生成表格
+1. Create the table with `write_new_worksheet` or a data-write API
 2. `freeze_panes`
 3. `batch_set_cell_style`
-4. 可选列宽/行高/auto filter
-5. 如果响应含 `source_info.styles_ignored=true`，明确告知用户当前引擎未应用样式
+4. Optionally set widths, heights, and autofilter
+5. If the response includes `source_info.styles_ignored=true`, explicitly tell the user the engine did not apply styles
 
-参考：
+References:
 
 - `references/charts-formatting.md`
 - `references/errors-recovery.md`
@@ -210,18 +210,20 @@ SQL 透视/结果表流程默认是：
 ## Reference Map
 
 - `references/file-management.md`
-  适合上传、导入、搜索、复制、分享、导出、版本入口问题。
+  Best for upload, import, search, copy, sharing, export, and file-entry issues.
 - `references/read-write.md`
-  适合读表、目标 worksheet 选择、写入 API 选择、行列操作、worksheet 管理。
+  Best for reading sheets, worksheet targeting, choosing the right write API, row and column operations, and worksheet management.
 - `references/formulas-sql.md`
-  适合公式、重算、SQL compile、SQL result table。
+  Best for formulas, recalculation, SQL compile, and SQL result tables.
+- `references/sql-formula-showcase.md`
+  Best when you need a single live `=SQL(...)` formula that demonstrates joins, aggregation, Top N, and spill behavior.
 - `references/charts-formatting.md`
-  适合低层图表 API、图片、冻结、样式、自动筛选、条件格式。
+  Best for low-level chart APIs, pictures, freezing panes, styles, autofilter, and conditional formatting.
 - `references/errors-recovery.md`
-  适合失败排查、限制说明、恢复路径。
+  Best for troubleshooting, limitations, and recovery paths.
 
 ## What This Skill Intentionally Excludes
 
-- 不负责完整 dashboard 编排、图表布局策略、信息图设计；这些由 `sheet-dashboard` 负责。
-- 不把整份 API 手册塞进主 `SKILL.md`；具体请求体和长示例放在 `references/` 与 `scripts/`。
-- 不默认替用户做样式重构、图表重排或复杂视觉设计，除非用户明确要求。
+- It does not handle full dashboard composition, chart layout strategy, or infographic design; use `sheet-dashboard` for those.
+- It does not turn the main `SKILL.md` into a full API manual; long request bodies and examples belong in `references/` and `scripts/`.
+- It does not default to large visual redesign or chart rearrangement unless the user explicitly asks for that.

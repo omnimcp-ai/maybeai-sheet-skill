@@ -1,45 +1,45 @@
 # Read/Write Reference
 
-## 目录
+## Contents
 
-1. 适用场景
-2. Worksheet 定位规则
-3. 读取端点
-4. 写入 API 选择
-5. 行列操作
-6. Worksheet 管理
-7. 写后验证
+1. When to use this
+2. Worksheet targeting rules
+3. Read endpoints
+4. How to choose a write API
+5. Row and column operations
+6. Worksheet management
+7. Post-write verification
 
-## 1. 适用场景
+## 1. When to use this
 
-当任务涉及读表、抽样、读表头、更新单元格、替换整表、按 key 更新、追加行、插删行列、创建或重命名 worksheet 时，读这份文档。
+Read this document when the task involves reading sheets, sampling data, reading headers, updating cells, replacing full tables, updating by key, appending rows, inserting or deleting rows and columns, or creating and renaming worksheets.
 
-## 2. Worksheet 定位规则
+## 2. Worksheet targeting rules
 
-这是最重要的操作规则。
+This is the most important operational rule.
 
-- 优先使用 `worksheet_name`
-- 某些端点只认 `uri?gid=<index>`
-- 两者都不传时，后端常默认第一张表
+- Prefer `worksheet_name`
+- Some endpoints only respect `uri?gid=<index>`
+- If you pass neither, the backend often defaults to the first worksheet
 
-典型规则：
+Typical rules:
 
 - `read_sheet` / `update_range` / `clear_range` / `update_data_keep_headers`
-  优先用 `worksheet_name`
+  Prefer `worksheet_name`
 - `read_headers` / `append_rows` / `update_range_by_lookup`
-  常用 `uri?gid=<index>`
+  Commonly use `uri?gid=<index>`
 
-如果用户说“改第二张表”“追加到 Summary”，先定位表，再执行。
+If the user says “update the second sheet” or “append to Summary”, identify the sheet first, then execute the write.
 
-## 3. 读取端点
+## 3. Read endpoints
 
-### 读全表或局部范围
+### Read a full sheet or a range
 
 ```text
 POST /api/v1/excel/read_sheet
 ```
 
-常用参数：
+Common parameters:
 
 - `worksheet_name`
 - `range_address`
@@ -47,24 +47,24 @@ POST /api/v1/excel/read_sheet
 - `filter_tokens`
 - `auto_filter`
 
-适用：
+Use it to:
 
-- 看数据
-- 抽样验证
-- 读图表/格式元数据
+- inspect data
+- sample and verify
+- read chart or formatting metadata
 
-### 读表头
+### Read headers
 
 ```text
 POST /api/v1/excel/read_headers
 ```
 
-适用：
+Use it to:
 
-- 快速拿 schema
-- SQL 写之前确认列名
+- get the schema quickly
+- confirm column names before writing SQL
 
-### 列 worksheet / versions
+### List worksheets and versions
 
 ```text
 POST /api/v1/excel/list_worksheets
@@ -73,31 +73,31 @@ POST /api/v1/excel/list_versions
 POST /api/v1/excel/read_version
 ```
 
-## 4. 写入 API 选择
+## 4. How to choose a write API
 
 ### `update_data_keep_headers`
 
-适合：
+Best when:
 
-- 表头已经正确
-- 需要整表覆盖数据区
-- 想保留列顺序
-- 想保留公式列
+- headers are already correct
+- you need to replace the entire data region
+- you want to preserve column order
+- you want to preserve formula columns
 
-优点：
+Advantages:
 
-- 输入可以是 list-of-dict
-- 对 agent 更安全
+- input can be list-of-dict
+- safer for agents
 
 ### `update_range_by_lookup`
 
-适合：
+Best when:
 
-- 业务主键同步
-- 更新已存在行
-- 自动追加不存在的新行
+- syncing business records by key
+- updating existing rows
+- appending missing rows automatically
 
-常见 key：
+Common keys:
 
 - `Order ID`
 - `SKU`
@@ -105,29 +105,29 @@ POST /api/v1/excel/read_version
 
 ### `append_rows`
 
-适合：
+Best when:
 
-- 盲追加对象行
-- 已知目标 sheet 和 header
+- you want a blind append of object rows
+- the target sheet and headers are already known
 
 ### `update_range`
 
-适合：
+Best when:
 
-- 精确改某个 A1 区域
-- 非表格化写入
-- 手工修改小块单元格
+- you need to update an exact A1 range
+- the target is non-tabular
+- you are making a small manual cell edit
 
 ### `clear_range`
 
-适合：
+Best when:
 
-- 清空指定区域
-- 写入前先做局部 reset
+- you need to clear a specific range
+- you want a local reset before a write
 
-## 5. 行列操作
+## 5. Row and column operations
 
-相关端点：
+Related endpoints:
 
 ```text
 POST /api/v1/excel/insert_rows
@@ -145,14 +145,14 @@ POST /api/v1/excel/set_columns_width
 POST /api/v1/excel/set_rows_height
 ```
 
-注意：
+Notes:
 
-- 行号是 1-based
-- 列通常用 Excel 字母，如 `A`、`B`
+- row numbers are 1-based
+- columns typically use Excel letters such as `A` and `B`
 
-## 6. Worksheet 管理
+## 6. Worksheet management
 
-相关端点：
+Related endpoints:
 
 ```text
 POST /api/v1/excel/write_new_worksheet
@@ -162,27 +162,27 @@ POST /api/v1/excel/move_worksheet
 POST /api/v1/excel/copy_worksheet
 ```
 
-建议：
+Guidance:
 
-- 新建报表页时先写数据，再单独做样式
-- 删除 worksheet 前先确认 `gid` 或名称，避免删错
+- When creating a new report sheet, write data first and style it separately
+- Before deleting a worksheet, confirm the `gid` or sheet name to avoid deleting the wrong sheet
 
-## 7. 写后验证
+## 7. Post-write verification
 
-至少执行一个：
+Do at least one of the following:
 
 - `read_sheet`
 - `read_headers`
 - `list_worksheets`
 
-强烈建议验证的场景：
+Strongly recommended after:
 
 - `update_data_keep_headers`
 - `update_range_by_lookup`
-- 非首个 worksheet 的写入
+- writes to non-first worksheets
 - `write_new_worksheet`
 
-对应脚本：
+Related scripts:
 
 - `scripts/02-read-data.sh`
 - `scripts/03-write-data.sh`

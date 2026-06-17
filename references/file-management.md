@@ -1,65 +1,65 @@
 # File Management Reference
 
-## 目录
+## Contents
 
-1. 适用场景
-2. 基本约定
-3. 核心端点
-4. 分享与权限
-5. 推荐流程
+1. When to use this
+2. Basic conventions
+3. Core endpoints
+4. Sharing and permissions
+5. Recommended flows
 
-## 1. 适用场景
+## 1. When to use this
 
-当用户要上传、导入、搜索、复制、重命名、删除、分享或导出 MaybeAI 表格时，读这份文档。
+Read this document when the task involves uploading, importing, searching, copying, renaming, deleting, sharing, or exporting MaybeAI spreadsheets.
 
-## 2. 基本约定
+## 2. Basic conventions
 
 - Base URL: `https://play-be.omnimcp.ai`
-- 认证头：`Authorization: Bearer <MAYBEAI_API_TOKEN>`
-- 后续请求普遍使用：
+- Auth header: `Authorization: Bearer <MAYBEAI_API_TOKEN>`
+- Most follow-up requests use:
 
 ```text
 https://www.maybe.ai/docs/spreadsheets/d/<document_id>
 ```
 
-- 上传成功后优先记录：
+- After upload succeeds, record:
   - `document_id`
   - `uri`
 
-## 3. 核心端点
+## 3. Core endpoints
 
-### 上传文件
+### Upload a file
 
 ```text
 POST /api/v1/excel/upload
 ```
 
-说明：
+Notes:
 
 - `multipart/form-data`
-- 必填 `file`
-- `user_id` 仅作为兼容字段，可选
+- `file` is required
+- `user_id` is optional and exists only as a compatibility field
 
-脚本：`scripts/01-file-management.sh`
+Script: `scripts/01-file-management.sh`
 
-### 从 URL 导入
+### Import from URL
 
 ```text
 POST /api/v1/excel/import_by_url
 ```
 
-适合已有公网下载链接的 xlsx 文件。
+Use this when you already have a public downloadable `.xlsx` URL.
 
-### 列出或搜索文件
+### List or search files
 
 ```text
 POST /api/v1/excel/list_files
 POST /api/v1/excel/search_files
 ```
 
-搜索适合按关键词找历史文件。
+Use search when you need to find historical files by keyword.
 
-### 重命名、删除、复制
+### Rename, delete, or copy
 
 ```text
 POST /api/v1/excel/rename_file
@@ -67,58 +67,58 @@ POST /api/v1/excel/delete_file
 POST /api/v1/excel/copy_excel
 ```
 
-这几个端点都围绕同一个 `uri` 工作。
+These endpoints all operate on the same `uri`.
 
-### 导出
+### Export
 
 ```text
 GET /api/v1/excel/export/{document_id}
 POST /api/v1/excel/download
 ```
 
-建议：
+Guidance:
 
-- 想直接拿 `.xlsx` 文件时优先 `export`
-- 已经拿着 `uri` 时可以用 `download`
+- Prefer `export` when you want the `.xlsx` file directly
+- Use `download` when you already have a `uri`
 
-## 4. 分享与权限
+## 4. Sharing and permissions
 
-### 可见性
+### Visibility
 
 ```text
 POST /api/v1/share/sheet/visibility
 ```
 
-### 共享给指定用户
+### Share with a specific user
 
 ```text
 POST /api/v1/share/sheet/update-permission
 ```
 
-### 查看权限
+### Inspect permissions
 
 ```text
 POST /api/v1/share/sheet/list
 POST /api/v1/share/sheet/permission
 ```
 
-## 5. 推荐流程
+## 5. Recommended flows
 
-### 新文件进入系统
+### Bring a new file into the system
 
-1. `upload` 或 `import_by_url`
-2. 记录 `document_id` 和 `uri`
+1. `upload` or `import_by_url`
+2. Record `document_id` and `uri`
 3. `list_worksheets`
-4. `read_headers` 或小范围 `read_sheet`
+4. `read_headers` or a small `read_sheet`
 
-### 交付前导出
+### Export before delivery
 
-1. 完成写入
-2. `read_sheet` 关键区域回读
-3. `export` 下载最终文件
+1. Finish all writes
+2. Read back the key ranges with `read_sheet`
+3. `export` the final file
 
-### 历史文件复用
+### Reuse a historical file
 
 1. `search_files`
 2. `copy_excel`
-3. 在副本上编辑，避免误改原件
+3. Edit the copy instead of the original

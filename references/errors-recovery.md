@@ -1,110 +1,110 @@
 # Errors and Recovery Reference
 
-## 目录
+## Contents
 
-1. 适用场景
-2. 鉴权失败
-3. 写到错 worksheet
-4. 样式不生效
-5. SQL 编译失败
-6. 上传返回异常
-7. 交付前验证
+1. When to use this
+2. Auth failures
+3. Wrote to the wrong worksheet
+4. Styles did not apply
+5. SQL compile failures
+6. Upload returned incomplete data
+7. Pre-delivery verification
 
-## 1. 适用场景
+## 1. When to use this
 
-当任务失败、结果落错位置、样式没生效、SQL 不通过、上传结果不完整时，读这份文档。
+Read this document when a task fails, writes to the wrong place, ignores styles, fails SQL compilation, or returns incomplete upload metadata.
 
-## 2. 鉴权失败
+## 2. Auth failures
 
-常见现象：
+Common symptoms:
 
 - `401`
 - `403`
-- 文件能预览，但 API 调用失败
+- the file can be previewed but API calls fail
 
-排查：
+Checks:
 
-1. 确认 `MAYBEAI_API_TOKEN` 已设置
-2. 确认请求头包含 `Authorization: Bearer <token>`
-3. 确认当前端点是否需要认证
+1. Confirm `MAYBEAI_API_TOKEN` is set
+2. Confirm the request includes `Authorization: Bearer <token>`
+3. Confirm the endpoint actually requires auth
 
-恢复：
+Recovery:
 
-- 重新设置 token
-- 用 `list_files` 或 `list_worksheets` 做最小化鉴权测试
+- reset the token
+- use `list_files` or `list_worksheets` as a minimal auth test
 
-## 3. 写到错 worksheet
+## 3. Wrote to the wrong worksheet
 
-这是最常见错误。
+This is the most common failure.
 
-原因：
+Causes:
 
-- 没传 `worksheet_name`
-- 需要 `?gid=` 的端点却只传了裸 `uri`
-- 误以为后端会记住上一轮选择
+- `worksheet_name` was omitted
+- the endpoint required `?gid=` but only a bare `uri` was passed
+- the caller assumed the backend would remember the prior worksheet selection
 
-恢复：
+Recovery:
 
 1. `list_worksheets`
-2. 确认目标名称和 gid
-3. 重写请求，显式传 `worksheet_name` 或 `uri?gid=N`
-4. `read_sheet` 回读确认
+2. confirm the target sheet name and gid
+3. rewrite the request with explicit `worksheet_name` or `uri?gid=N`
+4. `read_sheet` to confirm
 
-## 4. 样式不生效
+## 4. Styles did not apply
 
-常见现象：
+Common symptoms:
 
-- 接口成功，但视觉上没变化
-- 返回中出现 `source_info.styles_ignored=true`
+- the request succeeded but nothing changed visually
+- the response includes `source_info.styles_ignored=true`
 
-恢复：
+Recovery:
 
-1. 不要宣称样式已成功
-2. 明确告知当前引擎忽略了样式
-3. 如果任务要求强样式输出，切到支持样式的 workbook/引擎
+1. do not claim the style change succeeded
+2. explicitly tell the user the current engine ignored styles
+3. if the task requires strong visual formatting, switch to a workbook or engine that supports it
 
-## 5. SQL 编译失败
+## 5. SQL compile failures
 
-常见原因：
+Common causes:
 
-- 列名拼错
-- worksheet 名没加双引号
-- 方言太偏
-- `WITH` 或复杂结构被后端拒绝
+- misspelled column names
+- worksheet names not wrapped in double quotes
+- SQL dialect is too exotic or outside the current conservative PG worksheet SQL subset
+- `WITH` or a more complex structure is rejected by the backend
 
-恢复：
+Recovery:
 
 1. `read_headers`
-2. 必要时小范围 `read_sheet`
-3. 把 SQL 改成更接近 SQLite
-4. 先 `sql/compile`，通过后再 `sql/write_result`
+2. optionally use a small `read_sheet`
+3. rewrite the query toward the conservative PG worksheet SQL subset
+4. `sql/compile` first, then `sql/write_result`
 
-## 6. 上传返回异常
+## 6. Upload returned incomplete data
 
-常见现象：
+Common symptoms:
 
-- 上传成功但缺 `document_id`
-- 只返回 `uri`
-- 文件路径错误
+- upload succeeded but `document_id` is missing
+- only `uri` is returned
+- local file path was wrong
 
-恢复：
+Recovery:
 
-1. 从 `uri` 里解析 `document_id`
-2. 如果本地文件不存在，先修正 `EXCEL_FILE_PATH`
-3. 用 `scripts/01-file-management.sh` 的上传逻辑复现
+1. parse `document_id` from `uri`
+2. if the local file is missing, fix `EXCEL_FILE_PATH` first
+3. reproduce with the upload flow from `scripts/01-file-management.sh`
 
-## 7. 交付前验证
+## 7. Pre-delivery verification
 
-最低验证标准：
+Minimum verification standard:
 
 - `list_worksheets`
-- `read_sheet` 关键区域
-- 必要时 `export`
+- `read_sheet` on the key output range
+- optionally `export`
 
-以下操作后不要跳过验证：
+Do not skip verification after:
 
 - `sql/write_result`
 - `update_data_keep_headers`
 - `update_range_by_lookup`
-- 新建或删除 worksheet
-- 图表/图片/样式调整
+- creating or deleting worksheets
+- chart, picture, or style adjustments

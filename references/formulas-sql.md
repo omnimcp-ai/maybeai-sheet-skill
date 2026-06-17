@@ -1,18 +1,18 @@
 # Formulas and SQL Reference
 
-## 目录
+## Contents
 
-1. 适用场景
-2. 公式端点
-3. SQL 结果表流程
-4. SQL 写法约束
-5. 常见工作流
+1. When to use this
+2. Formula endpoints
+3. SQL result-table flow
+4. SQL authoring rules
+5. Common workflows
 
-## 1. 适用场景
+## 1. When to use this
 
-当任务涉及写公式、公式重算、SQL 透视、结果表输出、结果页验证时，读这份文档。
+Read this document when the task involves writing formulas, recalculating formulas, building SQL pivots or result tables, or verifying result sheets.
 
-## 2. 公式端点
+## 2. Formula endpoints
 
 ```text
 POST /api/v1/excel/formula/set
@@ -21,91 +21,132 @@ POST /api/v1/excel/calc_formulas
 POST /api/v1/excel/recalculate_formulas
 ```
 
-建议：
+Guidance:
 
-- 真正写回工作簿中的公式，用 `formula/set`
-- 临时预览或调试公式，用 `calc-formula` / `calc_formulas`
-- 改完大量数据后，需要统一刷新时，用 `recalculate_formulas`
+- Use `formula/set` when you want to persist a formula into the workbook
+- Use `calc-formula` or `calc_formulas` for temporary preview or debugging
+- Use `recalculate_formulas` when you need a broader refresh after data changes
+- `formula/set` calculates the target formula as part of that request
+- If you explicitly pass `skip_recalculation=true`, or you also need to refresh downstream formulas or report logic, call `recalculate_formulas` afterwards
 
-脚本：`scripts/06-formulas.sh`
+Script: `scripts/06-formulas.sh`
 
-## 3. SQL 结果表流程
+## 3. SQL result-table flow
 
-标准流程：
+Default flow:
 
 1. `list_worksheets`
 2. `read_headers`
-3. 必要时 `read_sheet` 抽样
+3. Optionally `read_sheet` for a sample
 4. `sql/compile`
 5. `sql/write_result`
-6. `read_sheet` 回读结果表
+6. `read_sheet` to verify the result sheet
 
-核心端点：
+Core endpoints:
 
 ```text
 POST /api/v1/excel/sql/compile
 POST /api/v1/excel/sql/write_result
 ```
 
-不要跳过 `compile`。
+Do not skip `compile`.
 
-## 4. SQL 写法约束
+## 4. SQL authoring rules
 
-优先写 SQLite 风格 SQL。
+Prefer PostgreSQL-compatible worksheet SQL, but stay within a conservative subset.
 
-允许的方向：
+Recommended default subset:
 
 - `select`
+- `with`
+- `where`
 - `group by`
+- `having`
 - `order by`
 - `limit`
 - `left join`
-- `with`
+- `inner join`
 - `coalesce`
 - `round`
+- `cast`
+- `case when`
+- `nullif`
+- `count` / `sum` / `avg` / `min` / `max`
 
-不推荐直接使用：
+Practical assumption for this skill:
 
-- MySQL 反引号
+- The online SQL path is PostgreSQL-backed
+- Agents should still prefer worksheet SQL that is easy to compile, portable, and easy to rewrite
+
+Hard boundaries:
+
+- only `SELECT` or `WITH ... SELECT`
+- no multiple statements
+- no `INSERT` / `UPDATE` / `DELETE` / DDL
+- no `SELECT INTO`
+- no row-locking clauses such as `FOR UPDATE`
+- do not reference `pg_catalog`, `information_schema`, `public`, or internal worksheet metadata tables
+
+Not recommended:
+
+- MySQL backticks
 - SQL Server `TOP`
-- PostgreSQL `ILIKE`
-- BigQuery 专属结构
+- BigQuery-only structures
+- heavy PostgreSQL-specific features that have not been validated with `sql/compile`
 
-表名规则：
+Notes:
 
-- 可以直接引用 worksheet 名
-- 也可以引用 `gid_*`
-- worksheet 名有空格时要加双引号，例如 `"Sales Data"`
+- `ILIKE` is no longer treated as automatically forbidden
+- whether it works in practice still depends on `sql/compile`
+- in many cases, `lower(...) like ...` is a safer default than depending on a more specific dialect feature
 
-如果 `WITH` 被后端拒绝，改成 inline subquery 再编译。
+Table naming rules:
 
-## 5. 常见工作流
+- Prefer worksheet names directly
+- If a worksheet name contains spaces, wrap it in double quotes, for example `"Sales Data"`
+- If a historical workflow already uses `gid_*`, that is still acceptable, but new examples should prefer worksheet names
 
-### 生成区域收入结果表
+Extra rules for `=SQL("...")`:
+
+- the SQL text lives inside an Excel string literal
+- internal double quotes must be doubled as `""`
+- for example, raw SQL `"Revenue"` becomes `""Revenue""` inside the formula
+
+If `WITH` is rejected by the backend, rewrite it as an inline subquery and compile again.
+
+## 5. Common workflows
+
+### Build a regional revenue result table
 
 1. `read_headers`
-2. 编写 SQL：
+2. Write PostgreSQL-compatible worksheet SQL:
 
 ```sql
 select "Region", sum("Revenue") as "Revenue"
-from gid_2
+from "Orders"
 group by "Region"
 order by "Revenue" desc
 ```
 
 3. `sql/compile`
 4. `sql/write_result`
-5. `read_sheet` 验证 `Pivot_RegionRevenue`
+5. `read_sheet` to verify `Pivot_RegionRevenue`
 
-### 同步业务数据后重算
+### Recalculate after syncing business data
 
 1. `update_range_by_lookup`
 2. `recalculate_formulas`
 3. `read_sheet`
 
-### 新报表页写公式
+### Write formulas into a new report worksheet
 
 1. `write_new_worksheet`
-2. `formula/set`
-3. `recalculate_formulas`
-4. `read_sheet`
+2. Write the raw SQL and validate it with `sql/compile`
+3. Use `formula/set` to write `=SQL("...")`
+4. By default, that request calculates and writes the target formula result
+5. If you explicitly skipped recalculation, or if other formulas depend on this result block, call `recalculate_formulas`
+6. `read_sheet`
+
+Reference:
+
+- `references/sql-formula-showcase.md`
