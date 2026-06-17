@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
-description: "Manages MaybeAI spreadsheets across upload, read/write, worksheet operations, formulas, formatting, and SQL result-table workflows. Use when working on Excel or spreadsheet tasks in MaybeAI, including file import, worksheet inspection, cell or range updates, row or column changes, formula execution, readable report sheets, sharing, or export. Use sheet-dashboard instead for chart-authoring or dashboard-first workflows."
-version: 0.6.1
+description: "Manages MaybeAI spreadsheets across upload, workbook profiling, read/write, worksheet operations, formulas, formatting, and SQL result-table workflows. Use when working on Excel or spreadsheet tasks in MaybeAI, including file import, workbook semantic overview, worksheet inspection, cell or range updates, row or column changes, formula execution, readable report sheets, sharing, or export. Use sheet-dashboard instead for chart-authoring or dashboard-first workflows."
+version: 0.6.2
 metadata:
   openclaw:
     requires:
@@ -14,7 +14,7 @@ metadata:
 
 # MaybeAI Sheet
 
-Use this skill for MaybeAI spreadsheet lifecycle work: upload or import files, inspect worksheets, read and write data, manage worksheets, run formulas, build SQL result sheets, apply lightweight formatting, share, and export.
+Use this skill for MaybeAI spreadsheet lifecycle work: upload or import files, profile workbook contents, inspect worksheets, read and write data, manage worksheets, run formulas, build SQL result sheets, apply lightweight formatting, share, and export.
 
 Do not use this skill as the primary workflow for chart authoring or dashboard composition. For dashboard-first work, use `sheet-dashboard`.
 
@@ -53,6 +53,7 @@ bash scripts/06-formulas.sh
 bash scripts/07-charts-pictures.sh
 bash scripts/08-formatting.sh
 bash scripts/09-end-to-end.sh
+bash scripts/10-workbook-profile.sh
 ```
 
 ## When To Use Which Path
@@ -60,6 +61,7 @@ bash scripts/09-end-to-end.sh
 | User intent | Recommended path |
 |---|---|
 | Upload or import Excel files | `references/file-management.md` |
+| Understand what a workbook contains before deciding what to read or analyze | `references/workbook-profile.md` |
 | Inspect worksheets, read headers, sample data | `references/read-write.md` |
 | Replace table data while keeping headers or formulas | `references/read-write.md` |
 | Update or append rows by business key | `references/read-write.md` |
@@ -138,6 +140,17 @@ Verification is especially required after:
 - Overwrite flows that preserve formulas or styles
 - Chart, image, or style changes
 
+### 6. Use workbook profile for broad workbook understanding
+
+Use `POST /api/v1/excel/workbook_profile` when the user asks what a workbook contains, which sheets are relevant, or where to start an analysis.
+
+- It returns a cached LLM-generated workbook summary plus worksheet sample rows
+- It is read-only and requires viewer access
+- Use it before manual `read_sheet` calls for unfamiliar multi-sheet workbooks
+- Use `force_refresh: true` after worksheet structure changes or when cached semantics may be stale
+
+See `references/workbook-profile.md` for request and response details.
+
 ## Agent-Safe Playbooks
 
 ### Upload and inspect a file
@@ -154,6 +167,19 @@ References:
 - `references/read-write.md`
 - `scripts/01-file-management.sh`
 - `scripts/02-read-data.sh`
+
+### Profile a workbook before analysis
+
+1. Capture `document_id` or `uri`
+2. Call `workbook_profile`
+3. Use `profile.summary` to explain the workbook at a high level
+4. Use `profile.worksheets[].sample_rows` to choose targeted `read_headers` or `read_sheet` calls
+5. If the workbook changed materially, call again with `force_refresh: true`
+
+References:
+
+- `references/workbook-profile.md`
+- `scripts/10-workbook-profile.sh`
 
 ### Refresh a table while keeping headers and formulas
 
@@ -211,6 +237,8 @@ References:
 
 - `references/file-management.md`
   Best for upload, import, search, copy, sharing, export, and file-entry issues.
+- `references/workbook-profile.md`
+  Best for workbook semantic overview, sheet discovery before analysis, cached profile behavior, and `workbook_profile` request/response details.
 - `references/read-write.md`
   Best for reading sheets, worksheet targeting, choosing the right write API, row and column operations, and worksheet management.
 - `references/formulas-sql.md`
