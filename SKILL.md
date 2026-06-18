@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
-description: "Manages MaybeAI spreadsheets across upload, workbook profiling, read/write, worksheet operations, formulas, formatting, and SQL result-table workflows. Use when working on Excel or spreadsheet tasks in MaybeAI, including file import, workbook semantic overview, worksheet inspection, cell or range updates, row or column changes, formula execution, readable report sheets, sharing, or export. Use sheet-dashboard instead for chart-authoring or dashboard-first workflows."
-version: 0.7.1
+description: "Manages MaybeAI spreadsheets across upload, workbook profiling, read/write, worksheet operations, formulas, formula lineage tracing, formatting, and SQL result-table workflows. Use when working on Excel or spreadsheet tasks in MaybeAI, including file import, workbook semantic overview, worksheet inspection, cell or range updates, row or column changes, formula execution, cell dependency tracing, readable report sheets, sharing, or export. Use sheet-dashboard instead for chart-authoring or dashboard-first workflows."
+version: 0.7.2
 metadata:
   openclaw:
     requires:
@@ -14,7 +14,7 @@ metadata:
 
 # MaybeAI Sheet
 
-Use this skill for MaybeAI spreadsheet lifecycle work: upload or import files, profile workbook contents, inspect worksheets, read and write data, manage worksheets, run formulas, build SQL result sheets, apply lightweight formatting, share, and export.
+Use this skill for MaybeAI spreadsheet lifecycle work: upload or import files, profile workbook contents, inspect worksheets, read and write data, manage worksheets, run formulas, trace formula lineage, build SQL result sheets, apply lightweight formatting, share, and export.
 
 Do not use this skill as the primary workflow for chart authoring or dashboard composition. For dashboard-first work, use `sheet-dashboard`.
 
@@ -54,6 +54,7 @@ bash scripts/07-charts-pictures.sh
 bash scripts/08-formatting.sh
 bash scripts/09-end-to-end.sh
 bash scripts/10-workbook-profile.sh
+bash scripts/11-lineage-trace.sh
 ```
 
 ## When To Use Which Path
@@ -67,6 +68,7 @@ bash scripts/10-workbook-profile.sh
 | Update or append rows by business key | `references/read-write.md` |
 | Insert, delete, or move rows and columns; manage worksheets | `references/read-write.md` |
 | Write formulas, batch-persist report blocks, recalculate, build SQL result tables, or create live `=SQL(...)` reports | `references/formulas-sql.md` / `references/sql-formula-showcase.md` |
+| Explain where a formula cell, computed column, or SQL formula result comes from | `references/lineage-trace.md` |
 | Apply lightweight styling, freeze panes, or add autofilter | `references/charts-formatting.md` |
 | Troubleshoot auth, wrong-sheet writes, ignored styles, or SQL compile errors | `references/errors-recovery.md` |
 | Build chart-heavy pages or dashboards | Switch to `sheet-dashboard`; this skill only covers low-level spreadsheet and chart APIs |
@@ -151,6 +153,17 @@ Use `POST /api/v1/excel/workbook_profile` when the user asks what a workbook con
 
 See `references/workbook-profile.md` for request and response details.
 
+### 7. Use lineage trace to explain computed cell dependencies
+
+Use `POST /api/v1/excel/lineage/trace` when the user asks where a formula result comes from, why a computed value is wrong, or which source columns feed a target cell.
+
+- It is read-only and requires viewer access
+- It traces ordinary Excel formulas, cross-sheet references, column-like formulas, and supported `=SQL(...)` formula outputs
+- Prefer `format: "tree"` when explaining to a user
+- Prefer `format: "node"` when a UI or downstream tool needs graph nodes and edges
+
+See `references/lineage-trace.md` for request and response details.
+
 ## Agent-Safe Playbooks
 
 ### Upload and inspect a file
@@ -233,6 +246,19 @@ References:
 - `references/formulas-sql.md`
 - `scripts/06-formulas.sh`
 
+### Trace formula lineage for a cell
+
+1. Capture `document_id` or `uri`
+2. Identify the target worksheet by `worksheet_name` or `gid`
+3. Call `lineage/trace` with the exact A1 target cell
+4. Use `tree` output to explain the dependency chain, or `node` output to render a graph
+5. If lineage is incomplete, read the referenced sheets and headers to verify unsupported or unresolved references
+
+References:
+
+- `references/lineage-trace.md`
+- `scripts/11-lineage-trace.sh`
+
 ### Produce a readable report worksheet
 
 1. Create the table with `write_new_worksheet` or a data-write API
@@ -259,6 +285,8 @@ References:
   Best for formulas, recalculation, SQL compile, and SQL result tables.
 - `references/sql-formula-showcase.md`
   Best when you need a single live `=SQL(...)` formula that demonstrates joins, aggregation, Top N, and spill behavior.
+- `references/lineage-trace.md`
+  Best for tracing a target cell's formula dependencies, explaining source columns behind computed values, or producing lineage graph nodes and edges.
 - `references/charts-formatting.md`
   Best for low-level chart APIs, pictures, freezing panes, styles, autofilter, and conditional formatting.
 - `references/errors-recovery.md`
