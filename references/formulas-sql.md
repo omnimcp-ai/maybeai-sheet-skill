@@ -15,6 +15,7 @@ Read this document when the task involves writing formulas, recalculating formul
 ## 2. Formula endpoints
 
 ```text
+POST /api/v1/excel/formula/batch_set
 POST /api/v1/excel/formula/set
 POST /api/v1/excel/calc-formula
 POST /api/v1/excel/calc_formulas
@@ -23,10 +24,13 @@ POST /api/v1/excel/recalculate_formulas
 
 Guidance:
 
-- Use `formula/set` when you want to persist a formula into the workbook
+- Use `formula/batch_set` when you need to persist a report block or many formulas in one workbook
+- Use `formula/set` when you want to persist one cell or a sparse one-off fix
 - Use `calc-formula` or `calc_formulas` for temporary preview or debugging
 - Use `recalculate_formulas` when you need a broader refresh after data changes
 - `formula/set` calculates the target formula as part of that request
+- For batch report builds, prefer `formula/batch_set` with rectangular `operations[]` and one final `recalculate_mode`
+- Phase 1 `formula/batch_set` is for ordinary workbook formulas only; do not use it for `=SQL(...)` or pivot formulas
 - If you explicitly pass `skip_recalculation=true`, or you also need to refresh downstream formulas or report logic, call `recalculate_formulas` afterwards
 
 Script: `scripts/06-formulas.sh`
@@ -139,6 +143,34 @@ order by "Revenue" desc
 3. `read_sheet`
 
 ### Write formulas into a new report worksheet
+
+1. `write_new_worksheet`
+2. Group derived cells into rectangular blocks
+3. Use `formula/batch_set`
+4. Prefer `recalculate_mode=workbook` if downstream sheets reference these blocks
+5. `read_sheet`
+
+Example payload:
+
+```json
+{
+  "uri": "https://www.maybe.ai/docs/spreadsheets/d/<doc_id>",
+  "skip_recalculation": true,
+  "recalculate_mode": "workbook",
+  "operations": [
+    {
+      "worksheet_name": "利润分析",
+      "range_address": "B2:F3",
+      "formulas": [
+        ["='利润表-2025Q1'!D4/10000", "='利润表-2025Q2'!D4/10000", "='利润表-2025Q3'!D4/10000", "='利润表-2025Q4'!D4/10000", "=SUM(B2:E2)"],
+        ["='利润表-2025Q1'!D5/10000", "='利润表-2025Q2'!D5/10000", "='利润表-2025Q3'!D5/10000", "='利润表-2025Q4'!D5/10000", "=SUM(B3:E3)"]
+      ]
+    }
+  ]
+}
+```
+
+### Write a live SQL formula into a report worksheet
 
 1. `write_new_worksheet`
 2. Write the raw SQL and validate it with `sql/compile`

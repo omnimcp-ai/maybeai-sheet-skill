@@ -30,6 +30,29 @@ curl -s -X POST "$BASE_URL/api/v1/excel/formula/set" \
   }" \
   | jq .
 
+# ── Batch Set Formula Block ───────────────────────────────────────────────────
+echo "=== Batch Set Formula Block ==="
+curl -s -X POST "$BASE_URL/api/v1/excel/formula/batch_set" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"uri\": \"$DOC_URI\",
+    \"skip_recalculation\": true,
+    \"recalculate_mode\": \"worksheet\",
+    \"operations\": [
+      {
+        \"worksheet_name\": \"Sheet1\",
+        \"range_address\": \"E2:G2\",
+        \"formulas\": [[
+          \"=SUM(B2:D2)\",
+          \"=AVERAGE(B2:D2)\",
+          \"=MAX(B2:D2)\"
+        ]]
+      }
+    ]
+  }" \
+  | jq .
+
 # ── Calculate Single Formula ──────────────────────────────────────────────────
 echo "=== Calc Single Formula ==="
 curl -s -X POST "$BASE_URL/api/v1/excel/calc-formula" \

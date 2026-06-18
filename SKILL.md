@@ -1,7 +1,7 @@
 ---
 name: maybeai-sheet
 description: "Manages MaybeAI spreadsheets across upload, workbook profiling, read/write, worksheet operations, formulas, formatting, and SQL result-table workflows. Use when working on Excel or spreadsheet tasks in MaybeAI, including file import, workbook semantic overview, worksheet inspection, cell or range updates, row or column changes, formula execution, readable report sheets, sharing, or export. Use sheet-dashboard instead for chart-authoring or dashboard-first workflows."
-version: 0.7.0
+version: 0.7.1
 metadata:
   openclaw:
     requires:
@@ -66,7 +66,7 @@ bash scripts/10-workbook-profile.sh
 | Replace table data while keeping headers or formulas | `references/read-write.md` |
 | Update or append rows by business key | `references/read-write.md` |
 | Insert, delete, or move rows and columns; manage worksheets | `references/read-write.md` |
-| Write formulas, recalculate, build SQL result tables, or create live `=SQL(...)` reports | `references/formulas-sql.md` / `references/sql-formula-showcase.md` |
+| Write formulas, batch-persist report blocks, recalculate, build SQL result tables, or create live `=SQL(...)` reports | `references/formulas-sql.md` / `references/sql-formula-showcase.md` |
 | Apply lightweight styling, freeze panes, or add autofilter | `references/charts-formatting.md` |
 | Troubleshoot auth, wrong-sheet writes, ignored styles, or SQL compile errors | `references/errors-recovery.md` |
 | Build chart-heavy pages or dashboards | Switch to `sheet-dashboard`; this skill only covers low-level spreadsheet and chart APIs |
@@ -213,6 +213,20 @@ References:
 4. `sql/compile`
 5. `sql/write_result`
 6. `read_sheet` to verify the output
+
+References:
+
+- `references/formulas-sql.md`
+- `scripts/06-formulas.sh`
+
+### Persist many report formulas efficiently
+
+1. Scaffold the destination worksheet first
+2. Group derived cells into rectangular blocks
+3. Use `formula/batch_set` for those blocks
+4. Prefer `recalculate_mode=workbook` when later blocks depend on earlier blocks
+5. Use `formula/set` only for sparse one-off fixes
+6. `read_sheet` to verify representative cells
 
 References:
 
