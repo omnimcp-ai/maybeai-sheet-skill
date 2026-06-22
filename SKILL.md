@@ -69,6 +69,7 @@ bash scripts/11-lineage-trace.sh
 | Insert, delete, or move rows and columns; manage worksheets | `references/read-write.md` |
 | Write formulas, batch-persist report blocks, recalculate, build SQL result tables, or create live `=SQL(...)` reports | `references/formulas-sql.md` / `references/sql-formula-showcase.md` |
 | Explain where a formula cell, computed column, or SQL formula result comes from | `references/lineage-trace.md` |
+| Render confirmed Maybe Sheet cells, ranges, or worksheets as clickable references in final answers | `references/clickable-refs.md` |
 | Apply lightweight styling, freeze panes, or add autofilter | `references/charts-formatting.md` |
 | Troubleshoot auth, wrong-sheet writes, ignored styles, or SQL compile errors | `references/errors-recovery.md` |
 | Build chart-heavy pages or dashboards | Switch to `sheet-dashboard`; this skill only covers low-level spreadsheet and chart APIs |
@@ -163,6 +164,14 @@ Use `POST /api/v1/excel/lineage/trace` when the user asks where a formula result
 - Prefer `format: "node"` when a UI or downstream tool needs graph nodes and edges
 
 See `references/lineage-trace.md` for request and response details.
+
+### 8. Use clickable references only for confirmed workbook locations
+
+When the final answer references real cells, ranges, or worksheets from the current Maybe Sheet workbook, follow `references/clickable-refs.md` so the frontend can make those references clickable.
+
+- Use clickable references only for confirmed current-workbook locations
+- Do not use clickable references for examples, guesses, inferred locations, or uncertain references
+- Do not place clickable references inside code blocks, formulas, SQL, JSON, or shell examples
 
 ## Agent-Safe Playbooks
 
