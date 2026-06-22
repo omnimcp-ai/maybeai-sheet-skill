@@ -170,8 +170,10 @@ See `references/lineage-trace.md` for request and response details.
 When the final answer references real cells, ranges, or worksheets from the current Maybe Sheet workbook, follow `references/clickable-refs.md` so the frontend can make those references clickable.
 
 - Use clickable references only for confirmed current-workbook locations
+- Include the current workbook document ID in the `docId` attribute
+- Include the target worksheet gid in the `gid` attribute
 - Do not use clickable references for examples, guesses, inferred locations, or uncertain references
-- Always use paired `sheet-ref` tags with visible text, never self-closing tags. Use `<sheet-ref ...>Sheet!A1</sheet-ref>`, not `<sheet-ref .../>`.
+- Always use paired `sheet-ref` tags with visible text, never self-closing tags. Use `<sheet-ref kind="cell" docId="DOCUMENT_ID" gid="WORKSHEET_GID" sheet="Sheet1" range="A1">Sheet1!A1</sheet-ref>`, not `<sheet-ref .../>`.
 - Do not place clickable references inside code blocks, formulas, SQL, JSON, or shell examples
 
 ## Agent-Safe Playbooks
