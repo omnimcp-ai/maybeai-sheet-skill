@@ -171,6 +171,7 @@ When the final answer references real cells, ranges, or worksheets from the curr
 
 - Use clickable references only for confirmed current-workbook locations
 - Do not use clickable references for examples, guesses, inferred locations, or uncertain references
+- Always use paired `sheet-ref` tags with visible text, never self-closing tags. Use `<sheet-ref ...>Sheet!A1</sheet-ref>`, not `<sheet-ref .../>`.
 - Do not place clickable references inside code blocks, formulas, SQL, JSON, or shell examples
 
 ## Agent-Safe Playbooks

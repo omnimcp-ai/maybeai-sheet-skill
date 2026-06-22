@@ -10,6 +10,8 @@ Cell or range:
 <sheet-ref kind="cell" sheet="WORKSHEET_NAME" range="A1_OR_A1:B2">VISIBLE_LABEL</sheet-ref>
 ```
 
+The tag must be paired and must include visible text. The frontend parser does not recognize self-closing tags.
+
 Worksheet:
 
 ```html
@@ -25,6 +27,8 @@ Worksheet:
 - Preserve the exact worksheet name from the workbook or tool result in the `sheet` attribute.
 - Use A1 notation in the `range` attribute. For a single cell, either `A1` or `A1:A1` is acceptable; prefer the form returned or required by the active tool.
 - Use a concise visible label, usually `SheetName!A1`, `SheetName!A1:B2`, or the worksheet name.
+- Always use paired tags with visible text: `<sheet-ref ...>SheetName!A1</sheet-ref>`.
+- Never use self-closing tags such as `<sheet-ref kind="cell" sheet="Sheet1" range="A1"/>`; they are not clickable in the current frontend.
 - Do not wrap `sheet-ref` tags in code blocks in the final answer.
 - Do not put `sheet-ref` tags inside formula code blocks, SQL code blocks, JSON, shell commands, or other literal examples.
 - If the task is not about Maybe Sheet, answer normally without `sheet-ref` tags.
@@ -38,6 +42,8 @@ Worksheet:
 - `sheet` 必须保留工作簿或工具结果里的精确工作表名。
 - `range` 使用 A1 表示法。单个单元格可以写成 `A1` 或 `A1:A1`；优先使用当前工具返回或要求的形式。
 - 显示文本保持简短，例如 `Sheet1!A1`、`Sheet1!A1:B2` 或工作表名。
+- 必须使用带显示文本的成对标签：`<sheet-ref ...>SheetName!A1</sheet-ref>`。
+- 禁止使用 `<sheet-ref kind="cell" sheet="Sheet1" range="A1"/>` 这类自闭合标签；当前前端不会把它渲染成可点击链接。
 - 不要把 `sheet-ref` 放进最终回答的代码块。
 - 不要把 `sheet-ref` 放进公式、SQL、JSON、shell 命令或其他字面量示例中。
 - 如果任务不是 Maybe Sheet 场景，正常回答，不要输出 `sheet-ref`。
@@ -63,3 +69,11 @@ For example, <sheet-ref kind="cell" sheet="Sheet1" range="A1">Sheet1!A1</sheet-r
 ```
 
 The bad example uses `sheet-ref` for an example, not a confirmed workbook reference.
+
+Bad:
+
+```md
+Q2 销售费用在 <sheet-ref kind="cell" sheet="利润分析" range="B6"/>
+```
+
+The bad example uses a self-closing tag, which the current frontend does not recognize as a clickable reference.
