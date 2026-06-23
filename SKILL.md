@@ -173,6 +173,7 @@ When the final answer references real cells, ranges, or worksheets from the curr
 - Include the current workbook document ID in the `docId` attribute
 - Include the target worksheet gid in the `gid` attribute
 - Do not use clickable references for examples, guesses, inferred locations, or uncertain references
+- When referencing workbook cells, ranges, or table names, always use `<sheet-ref kind="..." docId="..." gid="..." sheet="..." range="...">...</sheet-ref>` tags. Do not use conversational location descriptions such as "above", "the cell above", "D column row fourteen", or "D 列第十四行".
 - Always use paired `sheet-ref` tags with visible text, never self-closing tags. Use `<sheet-ref kind="cell" docId="DOCUMENT_ID" gid="WORKSHEET_GID" sheet="Sheet1" range="A1">Sheet1!A1</sheet-ref>`, not `<sheet-ref .../>`.
 - Do not place clickable references inside code blocks, formulas, SQL, JSON, or shell examples
 
