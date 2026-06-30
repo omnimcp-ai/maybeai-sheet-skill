@@ -1,7 +1,6 @@
 ---
 name: maybeai-sheet
-description: "Manages MaybeAI spreadsheets across upload, workbook profiling, read/write, worksheet operations, formulas, formula lineage tracing, formatting, and SQL result-table workflows. Use when working on Excel or spreadsheet tasks in MaybeAI, including file import, workbook semantic overview, worksheet inspection, cell or range updates, row or column changes, formula execution, cell dependency tracing, readable report sheets, sharing, or export. Use sheet-dashboard instead for chart-authoring or dashboard-first workflows."
-version: 0.8.0
+description: "Manages MaybeAI spreadsheets across upload, workbook profiling, read/write, worksheet operations, formulas, formula lineage tracing, formatting, and SQL result-table workflows. Use when working on Excel or spreadsheet tasks in MaybeAI, including file import, large row-count or large cell-count table imports that should route to SheetTable/PG, workbook semantic overview, worksheet inspection, cell or range updates, row or column changes, formula execution, cell dependency tracing, readable report sheets, sharing, or export. Use sheet-dashboard instead for chart-authoring or dashboard-first workflows."
 metadata:
   openclaw:
     requires:
@@ -86,7 +85,18 @@ Do not rely on defaults for non-first worksheets.
 
 See `references/read-write.md` for details.
 
-### 2. Prefer high-level write APIs before raw A1 writes
+### 2. Choose the right engine before importing large files
+
+MaybeAI Sheet routes `/api/v1/excel/*` through Playground, then into either `excelize-mcp` or SheetTable. Engine choice is a Playground routing decision.
+
+- Use SheetTable/PG for table-like workbooks when any worksheet has more than 10,000 rows, the workbook has more than 100,000 populated cells, the data is mostly flat records, or the workflow is SQL-heavy / append-upsert-heavy.
+- Use Excelize for workbook-style files where preserving Excel layout, styles, formulas, merged cells, and workbook semantics matters more than table scale.
+- For large table-like `.xlsx` uploads, prefer `POST /api/v1/excel/import` with multipart `engine=postgres`; avoid `/api/v1/excel/upload` for those large-data cases.
+- After import, verify `list_worksheets` reports `engine: "pg"` or worksheet `data_engine: "pg"`.
+
+See `references/file-management.md` for the exact request.
+
+### 3. Prefer high-level write APIs before raw A1 writes
 
 Priority order:
 
@@ -104,7 +114,7 @@ Meaning:
 
 `update_range` defaults to `RAW`: numeric-looking strings such as `"5.53%"` and `"9,007,000"` remain strings. Use `value_input_option=USER_ENTERED` only when the user intentionally wants Excel-like parsing of formulas, dates, numbers, and percentages. Check the write response `message`: `parse_result=NOT_REQUESTED` means RAW kept strings as text and lists them in `preserved_values`; `parse_result=PASS` means USER_ENTERED parsed values listed in `parsed_values`; `parse_result=PARTIAL` means values listed in `parsed_values` parsed, while `preserved_text_values` may stay text unless target cells are numeric-formatted.
 
-### 3. Separate data writes from style writes
+### 4. Separate data writes from style writes
 
 Do not assume `write_new_worksheet`, `update_range`, or `sql/write_result` will automatically apply formatting.
 
@@ -117,7 +127,7 @@ If the user wants a readable report or manager-facing table:
 
 See `references/charts-formatting.md` for the style playbook.
 
-### 4. Compile SQL before writing a result sheet
+### 5. Compile SQL before writing a result sheet
 
 Default SQL result-table flow:
 
@@ -129,7 +139,7 @@ Default SQL result-table flow:
 
 Do not skip `sql/compile`.
 
-### 5. Always read back after writing
+### 6. Always read back after writing
 
 Do at least one of the following:
 
@@ -145,7 +155,7 @@ Verification is especially required after:
 - Overwrite flows that preserve formulas or styles
 - Chart, image, or style changes
 
-### 6. Use workbook profile for broad workbook understanding
+### 7. Use workbook profile for broad workbook understanding
 
 Use `POST /api/v1/excel/workbook_profile` when the user asks what a workbook contains, which sheets are relevant, or where to start an analysis.
 
@@ -156,7 +166,7 @@ Use `POST /api/v1/excel/workbook_profile` when the user asks what a workbook con
 
 See `references/workbook-profile.md` for request and response details.
 
-### 7. Use lineage trace to explain computed cell dependencies
+### 8. Use lineage trace to explain computed cell dependencies
 
 Use `POST /api/v1/excel/lineage/trace` when the user asks where a formula result comes from, why a computed value is wrong, or which source columns feed a target cell.
 
@@ -167,7 +177,7 @@ Use `POST /api/v1/excel/lineage/trace` when the user asks where a formula result
 
 See `references/lineage-trace.md` for request and response details.
 
-### 8. Use clickable references only for confirmed workbook locations
+### 9. Use clickable references only for confirmed workbook locations
 
 When the final answer references real cells, ranges, or worksheets from the current Maybe Sheet workbook, follow `references/clickable-refs.md` so the frontend can make those references clickable.
 
