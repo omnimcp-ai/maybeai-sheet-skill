@@ -102,7 +102,7 @@ Meaning:
 - Use `append_rows` for simple object-row appends
 - Use `update_range` only when you must target an exact A1 range or non-tabular cells
 
-`update_range` defaults to `RAW`: numeric-looking strings such as `"5.53%"` and `"9,007,000"` remain strings. Use `value_input_option=USER_ENTERED` only when the user intentionally wants Excel-like parsing of formulas, dates, numbers, and percentages. Check the write response `message`: `parse_result=NOT_REQUESTED` means RAW kept strings as text, `parse_result=PASS` means USER_ENTERED parsed them, and `parse_result=PARTIAL` means pure-digit strings may stay text unless the target cells are numeric-formatted.
+`update_range` defaults to `RAW`: numeric-looking strings such as `"5.53%"` and `"9,007,000"` remain strings. Use `value_input_option=USER_ENTERED` only when the user intentionally wants Excel-like parsing of formulas, dates, numbers, and percentages. Check the write response `message`: `parse_result=NOT_REQUESTED` means RAW kept strings as text and lists them in `preserved_values`; `parse_result=PASS` means USER_ENTERED parsed values listed in `parsed_values`; `parse_result=PARTIAL` means values listed in `parsed_values` parsed, while `preserved_text_values` may stay text unless target cells are numeric-formatted.
 
 ### 3. Separate data writes from style writes
 
