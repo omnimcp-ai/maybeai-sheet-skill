@@ -189,6 +189,18 @@ When the final answer references real cells, ranges, or worksheets from the curr
 - Always use paired `sheet-ref` tags with visible text, never self-closing tags. Use `<sheet-ref kind="cell" docId="DOCUMENT_ID" gid="WORKSHEET_GID" sheet="Sheet1" range="A1">Sheet1!A1</sheet-ref>`, not `<sheet-ref .../>`.
 - Do not place clickable references inside code blocks, formulas, SQL, JSON, or shell examples
 
+### 10. Use the share API family for visibility changes
+
+When the user asks to make a Maybe Sheet public or private, use:
+
+- `POST /api/v1/share/sheet/visibility`
+
+Do not use:
+
+- `/api/v1/excel/spreadsheets/d/{id}/share`
+
+That spreadsheet-path share route is the wrong endpoint for MaybeAI Sheet visibility changes and returns 404. Use the `share/sheet/*` API family for visibility, permission updates, access removal, and share listing.
+
 ## Agent-Safe Playbooks
 
 ### Upload and inspect a file
